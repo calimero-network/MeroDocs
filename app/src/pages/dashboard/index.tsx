@@ -96,7 +96,7 @@ export default function Dashboard() {
 
   const handleCreateAgreement = () => {
     if (agreementName.trim()) {
-      // Here you would typically create the agreement in your backend
+      // Create agreement in your backend
       console.log('Creating agreement:', agreementName);
       setShowCreateModal(false);
       setAgreementName('');

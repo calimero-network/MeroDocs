@@ -4,10 +4,10 @@ import {
   RpcError,
   handleRpcError,
   getAppEndpointKey,
-  // prepareAuthenticatedRequestConfig, // Commented out unused import
+  // prepareAuthenticatedRequestConfig, 
 } from '@calimero-network/calimero-client';
 import { ClientApi } from '../clientApi';
-// import { ClientMethod } from '../clientApi'; // Commented out unused import
+// import { ClientMethod } from '../clientApi'; 
 
 export function getJsonRpcClient() {
   const appEndpointKey = getAppEndpointKey();
