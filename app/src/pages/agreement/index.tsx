@@ -26,13 +26,8 @@ import {
 import { motion } from 'framer-motion';
 import { Button, Card, CardContent } from '../../components/ui';
 import { MobileLayout } from '../../components/MobileLayout';
-import { DocusealForm } from '@docuseal/react';
 
 // Constants
-const DOCUSEAL_CONFIG = {
-  formUrl: 'https://docuseal.com/d/LEVGR9rhZYf86M',
-  defaultEmail: 'signer@example.com',
-} as const;
 
 const ANIMATION_VARIANTS = {
   container: {
@@ -96,9 +91,6 @@ const AgreementPage: React.FC = () => {
   const [showPayloadDialog, setShowPayloadDialog] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [documents, setDocuments] = useState<UploadedDocument[]>([]);
-  const [selectedDocument, setSelectedDocument] =
-    useState<UploadedDocument | null>(null);
-  const [showDocuSeal, setShowDocuSeal] = useState(false);
 
   // Mock data - in production, this would come from API/context
   const currentAgreement: AgreementData = useMemo(
@@ -190,9 +182,9 @@ const AgreementPage: React.FC = () => {
     setDocuments((prev) => prev.filter((doc) => doc.id !== documentId));
   }, []);
 
-  const handleOpenWithDocuSeal = useCallback((document: UploadedDocument) => {
-    setSelectedDocument(document);
-    setShowDocuSeal(true);
+  const handleOpenDocument = useCallback((document: UploadedDocument) => {
+    // For now, just show an alert - in the future this will open a custom document viewer
+    alert(`Opening document: ${document.name}\nThis will be replaced with a custom document viewer.`);
   }, []);
 
   const handleGenerateInvite = useCallback(() => {
@@ -207,71 +199,6 @@ const AgreementPage: React.FC = () => {
     alert('Payload copied to clipboard!');
     setShowPayloadDialog(false);
   }, [generatedPayload]);
-
-  const handleCloseDocuSeal = useCallback(() => {
-    setShowDocuSeal(false);
-    setSelectedDocument(null);
-  }, []);
-
-  const handleDocumentComplete = useCallback(
-    (data: any) => {
-      console.log('Document completed:', data);
-      alert('Document signed successfully!');
-      handleCloseDocuSeal();
-    },
-    [handleCloseDocuSeal],
-  );
-
-  if (showDocuSeal) {
-    return (
-      <MobileLayout>
-        <div className="space-y-4">
-          {/* DocuSeal Header */}
-          <Card className="border-border/50">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setShowDocuSeal(false);
-                      setSelectedDocument(null);
-                    }}
-                    className="p-2 h-auto w-auto"
-                  >
-                    <ArrowLeft className="w-5 h-5" />
-                  </Button>
-                  <div>
-                    <h1 className="text-lg font-semibold text-foreground">
-                      {selectedDocument?.name || 'Document Signing'}
-                    </h1>
-                    <p className="text-sm text-muted-foreground">
-                      Document Editor & Signer
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* DocuSeal Form */}
-          <Card className="border-border/50">
-            <CardContent className="p-0">
-              <div className="h-[80vh] w-full">
-                <DocusealForm
-                  src={DOCUSEAL_CONFIG.formUrl}
-                  email={DOCUSEAL_CONFIG.defaultEmail}
-                  onComplete={handleDocumentComplete}
-                  className="w-full h-full"
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </MobileLayout>
-    );
-  }
 
   return (
     <MobileLayout>
@@ -439,7 +366,7 @@ const AgreementPage: React.FC = () => {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleOpenWithDocuSeal(document)}
+                            onClick={() => handleOpenDocument(document)}
                             className="p-2 h-auto w-auto"
                           >
                             <Eye className="w-4 h-4" />
