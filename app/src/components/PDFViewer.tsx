@@ -903,7 +903,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={() => setShowMobileActions(true)}
-          className="fixed bottom-6 right-6 w-14 h-14 bg-primary text-primary-foreground rounded-full shadow-lg hover:shadow-xl transition-shadow z-40 flex items-center justify-center"
+          className="fixed bottom-12 right-6 w-14 h-14 bg-primary text-primary-foreground rounded-full shadow-lg hover:shadow-xl transition-shadow z-40 flex items-center justify-center"
           style={{
             backgroundColor: 'var(--primary)',
             color: 'var(--primary-foreground)',

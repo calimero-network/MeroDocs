@@ -145,6 +145,17 @@
     z-index: 9999 !important;
   }
 
+  /* Apply to all modal overlays */
+  .pdf-viewer-modal-overlay,
+  [class*="z-[9999]"] {
+    z-index: 9999 !important;
+  }
+
+  /* Ensure signature pad modal stays above everything */
+  .signature-pad-modal-overlay {
+    z-index: 9999 !important;
+  }
+
   /* Adjust signature overlay touch targets for mobile */
   .signature-overlay {
     touch-action: none;
