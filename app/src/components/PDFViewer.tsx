@@ -9,6 +9,9 @@ import {
   FileText,
   AlertCircle,
   Save,
+  PenTool,
+  Plus,
+  Check,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from './ui/button';
@@ -19,8 +22,17 @@ import {
   type SignaturePosition,
 } from '../services/pdfService';
 import SignatureOverlay from './SignatureOverlay';
+import SignaturePadComponent from './SignaturePad';
 import * as pdfjsLib from 'pdfjs-dist';
 import './PDFViewer.css';
+
+// Types for saved signatures
+interface SavedSignature {
+  id: string;
+  name: string;
+  dataURL: string;
+  createdAt: string;
+}
 
 interface PDFViewerProps {
   file: File | null;
@@ -67,6 +79,14 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
   );
   const [savingPDF, setSavingPDF] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  
+  // Signature-related state
+  const [documentSignatures, setDocumentSignatures] = useState<SignaturePosition[]>([]);
+  const [showSignatureOptions, setShowSignatureOptions] = useState(false);
+  const [showSignaturePad, setShowSignaturePad] = useState(false);
+  const [savedSignatures, setSavedSignatures] = useState<SavedSignature[]>([]);
+  const [selectedSavedSignature, setSelectedSavedSignature] = useState<string | null>(null);
+  const [signingMode, setSigningMode] = useState(false);
 
   // Load PDF document
   const loadPDF = useCallback(async () => {
@@ -113,9 +133,11 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
     setSelectedSignatureId(signatureId);
   }, []);
 
-  // Handle signature updates
   const handleSignatureUpdate = useCallback(
     (updatedSignature: SignaturePosition) => {
+      setDocumentSignatures(prev => 
+        prev.map(sig => sig.id === updatedSignature.id ? updatedSignature : sig)
+      );
       if (onSignatureUpdate) {
         onSignatureUpdate(updatedSignature);
       }
@@ -123,16 +145,22 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
     [onSignatureUpdate],
   );
 
-  // Handle signature deletion
   const handleSignatureDelete = useCallback(
     (signatureId: string) => {
+      setDocumentSignatures(prev => prev.filter(sig => sig.id !== signatureId));
+      setSelectedSignatureId(null);
       if (onSignatureDelete) {
         onSignatureDelete(signatureId);
       }
-      setSelectedSignatureId(null);
     },
     [onSignatureDelete],
   );
+
+  const handleSignaturePlace = useCallback((signature: SignaturePosition) => {
+    setDocumentSignatures(prev => [...prev, signature]);
+    setSigningMode(false);
+    setSelectedSavedSignature(null);
+  }, []);
 
   // Handle canvas click for signature placement
   const handleCanvasClick = useCallback(
@@ -142,6 +170,39 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
         setSelectedSignatureId(null);
       }
 
+      // Handle signature placement in signing mode
+      if (signingMode && selectedSavedSignature) {
+        // Check if click is on an existing signature overlay
+        const target = event.target as HTMLElement;
+        if (target.closest('.signature-overlay')) {
+          return; // Don't place signature if clicking on existing overlay
+        }
+
+        const canvas = event.currentTarget;
+        const rect = canvas.getBoundingClientRect();
+        const clickX = event.clientX - rect.left;
+        const clickY = event.clientY - rect.top;
+
+        // Convert click coordinates to actual canvas coordinates
+        const canvasX = (clickX / rect.width) * canvas.width;
+        const canvasY = (clickY / rect.height) * canvas.height;
+
+        const signaturePosition: SignaturePosition = {
+          id: Date.now().toString(),
+          x: canvasX - 50, // Center the signature
+          y: canvasY - 25,
+          width: 100,
+          height: 50,
+          pageNumber: currentPage,
+          signatureData: selectedSavedSignature,
+          timestamp: Date.now(),
+        };
+
+        handleSignaturePlace(signaturePosition);
+        return;
+      }
+
+      // Original signature placement logic for external signatures
       if (!selectedSignature || !onSignaturePlace) return;
 
       // Check if click is on an existing signature overlay
@@ -156,7 +217,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
       const clickY = event.clientY - rect.top;
 
       // Convert click coordinates to actual canvas coordinates
-      // Since we're using CSS width/height that matches the scale, we need to convert back to original coordinates
       const canvasX = (clickX / rect.width) * canvas.width;
       const canvasY = (clickY / rect.height) * canvas.height;
 
@@ -173,7 +233,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
       onSignaturePlace(signaturePosition);
     },
-    [selectedSignature, selectedSignatureId, currentPage, onSignaturePlace],
+    [selectedSignature, selectedSignatureId, currentPage, onSignaturePlace, signingMode, selectedSavedSignature, handleSignaturePlace],
   );
 
   // Handle save signed PDF
@@ -195,6 +255,72 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
       setSavingPDF(false);
     }
   }, [file, signatures, scale, onSaveSignedPDF]);
+
+  // Load saved signatures from localStorage
+  useEffect(() => {
+    const savedSignatures = localStorage.getItem('signatures');
+    if (savedSignatures) {
+      try {
+        setSavedSignatures(JSON.parse(savedSignatures));
+      } catch (error) {
+        console.error('Error loading signatures:', error);
+      }
+    }
+  }, []);
+
+  // Signature functionality
+  const handleStartSigning = () => {
+    setShowSignatureOptions(true);
+  };
+
+  const handleCreateNewSignature = () => {
+    setShowSignatureOptions(false);
+    setShowSignaturePad(true);
+  };
+
+  const handleSelectExistingSignature = (signatureData: string) => {
+    setSelectedSavedSignature(signatureData);
+    setSigningMode(true);
+    setShowSignatureOptions(false);
+  };
+
+  const handleSignaturePadSave = (signatureData: string) => {
+    setSelectedSavedSignature(signatureData);
+    setSigningMode(true);
+    setShowSignaturePad(false);
+  };
+
+  const handleSignaturePadCancel = () => {
+    setShowSignaturePad(false);
+  };
+
+  const handleDownloadSignedPDF = async () => {
+    if (!file || documentSignatures.length === 0) return;
+
+    setSavingPDF(true);
+    try {
+      const signedPDFBlob = await pdfService.generateSignedPDF(file, documentSignatures, scale);
+      
+      // Download the signed PDF
+      const url = URL.createObjectURL(signedPDFBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `signed-${file.name}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      if (onSaveSignedPDF) {
+        onSaveSignedPDF(signedPDFBlob);
+      }
+    } catch (err) {
+      console.error('Error saving signed PDF:', err);
+      setError('Failed to save signed PDF.');
+    } finally {
+      setSavingPDF(false);
+    }
+  };
 
   // Load PDF when file changes
   useEffect(() => {
@@ -360,6 +486,32 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
         </div>
 
         <div className="flex items-center space-x-2">
+          {/* Sign Document Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleStartSigning}
+            className="flex items-center gap-2"
+          >
+            <PenTool size={16} />
+            Sign Document
+          </Button>
+          
+          {/* Download Signed PDF Button */}
+          {documentSignatures.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadSignedPDF}
+              disabled={savingPDF}
+              className="flex items-center gap-2"
+              title="Download signed PDF"
+            >
+              {savingPDF ? <LoadingSpinner size="sm" /> : <Download size={16} />}
+              Download Signed
+            </Button>
+          )}
+          
           {showDownload && (
             <Button
               variant="ghost"
@@ -418,11 +570,11 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
           <span className="text-sm font-medium px-2">
             <span style={{ color: 'var(--current-text)' }}>{currentPage}</span>
             <span className="text-secondary"> / {pdf.numPages}</span>
-            {signaturesOnCurrentPage.length > 0 && (
+            {(signaturesOnCurrentPage.length > 0 || documentSignatures.filter(sig => sig.pageNumber === currentPage).length > 0) && (
               <span className="text-secondary">
                 {' '}
-                ({signaturesOnCurrentPage.length} signature
-                {signaturesOnCurrentPage.length !== 1 ? 's' : ''})
+                ({signaturesOnCurrentPage.length + documentSignatures.filter(sig => sig.pageNumber === currentPage).length} signature
+                {signaturesOnCurrentPage.length + documentSignatures.filter(sig => sig.pageNumber === currentPage).length !== 1 ? 's' : ''})
               </span>
             )}
           </span>
@@ -489,7 +641,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
                 >
                   <canvas
                     className={`max-w-full h-auto border border-gray-300 rounded-lg shadow-sm ${
-                      selectedSignature ? 'cursor-crosshair' : ''
+                      selectedSignature || signingMode ? 'cursor-crosshair' : ''
                     }`}
                     onClick={handleCanvasClick}
                     style={{
@@ -512,7 +664,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
                     }}
                   />
 
-                  {/* Signature Overlays */}
+                  {/* External Signature Overlays */}
                   {signatures
                     .filter((sig) => sig.pageNumber === currentPage)
                     .map((signature) => (
@@ -527,10 +679,25 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
                       />
                     ))}
 
+                  {/* Document Signature Overlays */}
+                  {documentSignatures
+                    .filter((sig) => sig.pageNumber === currentPage)
+                    .map((signature) => (
+                      <SignatureOverlay
+                        key={signature.id}
+                        signature={signature}
+                        scale={scale}
+                        onUpdate={handleSignatureUpdate}
+                        onDelete={handleSignatureDelete}
+                        isSelected={selectedSignatureId === signature.id}
+                        onSelect={handleSignatureSelect}
+                      />
+                    ))}
+
                   {/* Signature placement hint */}
-                  {selectedSignature && (
+                  {(selectedSignature || signingMode) && (
                     <div className="absolute top-2 left-2 bg-blue-500 text-white px-2 py-1 rounded text-xs">
-                      Click on the document to place your signature
+                      {signingMode ? 'Click on the document to place your signature' : 'Click on the document to place your signature'}
                     </div>
                   )}
                 </motion.div>
@@ -539,6 +706,74 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Signature Options Modal */}
+      {showSignatureOptions && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-900 rounded-lg p-6 w-full max-w-md border border-border shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Choose Signature Option</h3>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowSignatureOptions(false)}
+                className="p-1 h-auto w-auto"
+              >
+                <X size={20} />
+              </Button>
+            </div>
+
+            <div className="space-y-4">
+              <Button
+                onClick={handleCreateNewSignature}
+                className="w-full flex items-center gap-3 p-4 border border-border rounded-lg hover:bg-muted transition-colors"
+                variant="outline"
+              >
+                <Plus size={20} />
+                <div className="text-left">
+                  <div className="font-medium">Create New Signature</div>
+                  <div className="text-sm text-muted-foreground">Draw a new signature</div>
+                </div>
+              </Button>
+
+              {savedSignatures.length > 0 && (
+                <>
+                  <div className="text-sm font-medium text-muted-foreground">Or choose from existing signatures:</div>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {savedSignatures.map((signature) => (
+                      <button
+                        key={signature.id}
+                        onClick={() => handleSelectExistingSignature(signature.dataURL)}
+                        className="w-full p-3 border border-border rounded-lg hover:bg-muted transition-colors flex items-center gap-3"
+                      >
+                        <div className="w-16 h-8 bg-background border rounded flex items-center justify-center overflow-hidden">
+                          <img
+                            src={signature.dataURL}
+                            alt={signature.name}
+                            className="max-w-full max-h-full object-contain"
+                          />
+                        </div>
+                        <div className="text-left flex-1">
+                          <div className="font-medium text-sm">{signature.name}</div>
+                          <div className="text-xs text-muted-foreground">Created: {signature.createdAt}</div>
+                        </div>
+                        <Check size={16} className="text-green-500" />
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Signature Pad Modal */}
+      <SignaturePadComponent
+        isOpen={showSignaturePad}
+        onSave={handleSignaturePadSave}
+        onCancel={handleSignaturePadCancel}
+      />
     </motion.div>
   );
 };
