@@ -26,6 +26,7 @@ import {
 import { motion } from 'framer-motion';
 import { Button, Card, CardContent } from '../../components/ui';
 import { MobileLayout } from '../../components/MobileLayout';
+import PDFViewer from '../../components/PDFViewer';
 
 // Constants
 
@@ -91,6 +92,9 @@ const AgreementPage: React.FC = () => {
   const [showPayloadDialog, setShowPayloadDialog] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [documents, setDocuments] = useState<UploadedDocument[]>([]);
+  const [selectedDocument, setSelectedDocument] =
+    useState<UploadedDocument | null>(null);
+  const [showPDFViewer, setShowPDFViewer] = useState(false);
 
   // Mock data - in production, this would come from API/context
   const currentAgreement: AgreementData = useMemo(
@@ -183,8 +187,13 @@ const AgreementPage: React.FC = () => {
   }, []);
 
   const handleOpenDocument = useCallback((document: UploadedDocument) => {
-    // For now, just show an alert - in the future this will open a custom document viewer
-    alert(`Opening document: ${document.name}\nThis will be replaced with a custom document viewer.`);
+    setSelectedDocument(document);
+    setShowPDFViewer(true);
+  }, []);
+
+  const handleClosePDFViewer = useCallback(() => {
+    setShowPDFViewer(false);
+    setSelectedDocument(null);
   }, []);
 
   const handleGenerateInvite = useCallback(() => {
@@ -396,10 +405,10 @@ const AgreementPage: React.FC = () => {
         >
           <Button
             onClick={() => setShowUploadModal(true)}
-            className="h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all duration-300"
+            className="h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 aspect-square"
             size="lg"
           >
-            <Plus className="w-6 h-6" />
+            <Plus className="w-6 h-6 text-white dark:text-black" />
           </Button>
         </motion.div>
       </motion.div>
@@ -445,7 +454,10 @@ const AgreementPage: React.FC = () => {
                 <select className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent mb-3">
                   <option>Enter From Contacts</option>
                 </select>
-                <Button onClick={handleGenerateInvite} className="w-full">
+                <Button
+                  onClick={handleGenerateInvite}
+                  className="w-full text-white dark:text-black text-lg"
+                >
                   Generate Invite
                 </Button>
               </div>
@@ -493,7 +505,10 @@ const AgreementPage: React.FC = () => {
               </div>
 
               <div className="flex space-x-2">
-                <Button onClick={handleCopyPayload} className="flex-1">
+                <Button
+                  onClick={handleCopyPayload}
+                  className="flex-1 text-white dark:text-black"
+                >
                   Copy Payload
                 </Button>
                 <Button
@@ -535,14 +550,17 @@ const AgreementPage: React.FC = () => {
             <div className="space-y-4">
               <div className="text-center">
                 <Upload className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-                <h4 className="text-lg font-semibold text-foreground mb-2">
+                <h4 className="text-lg font-semibold text-foreground mb-2 ">
                   Upload PDF Document
                 </h4>
                 <p className="text-sm text-muted-foreground mb-4">
                   Select a PDF file to upload for document signing
                 </p>
-                <Button onClick={handleUploadClick} className="w-full mb-3">
-                  <Upload className="w-4 h-4 mr-2" />
+                <Button
+                  onClick={handleUploadClick}
+                  className="w-full mb-3 text-white dark:text-black"
+                >
+                  <Upload className="w-4 h-4 mr-2 text-white dark:text-black" />
                   Choose PDF File
                 </Button>
                 <input
@@ -558,6 +576,28 @@ const AgreementPage: React.FC = () => {
                 </p>
               </div>
             </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* PDF Viewer Modal */}
+      {showPDFViewer && selectedDocument && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="w-full max-w-4xl h-[90vh] max-h-[90vh]"
+          >
+            <PDFViewer
+              file={selectedDocument.file}
+              onClose={handleClosePDFViewer}
+              title={selectedDocument.name}
+              showDownload={true}
+              showClose={true}
+              maxHeight="90vh"
+              className="w-full h-full"
+            />
           </motion.div>
         </div>
       )}
