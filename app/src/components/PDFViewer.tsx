@@ -79,14 +79,19 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
   );
   const [savingPDF, setSavingPDF] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  
+
   // Signature-related state
-  const [documentSignatures, setDocumentSignatures] = useState<SignaturePosition[]>([]);
+  const [documentSignatures, setDocumentSignatures] = useState<
+    SignaturePosition[]
+  >([]);
   const [showSignatureOptions, setShowSignatureOptions] = useState(false);
   const [showSignaturePad, setShowSignaturePad] = useState(false);
   const [savedSignatures, setSavedSignatures] = useState<SavedSignature[]>([]);
-  const [selectedSavedSignature, setSelectedSavedSignature] = useState<string | null>(null);
+  const [selectedSavedSignature, setSelectedSavedSignature] = useState<
+    string | null
+  >(null);
   const [signingMode, setSigningMode] = useState(false);
+  const [showMobileActions, setShowMobileActions] = useState(false);
 
   // Load PDF document
   const loadPDF = useCallback(async () => {
@@ -135,8 +140,10 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
   const handleSignatureUpdate = useCallback(
     (updatedSignature: SignaturePosition) => {
-      setDocumentSignatures(prev => 
-        prev.map(sig => sig.id === updatedSignature.id ? updatedSignature : sig)
+      setDocumentSignatures((prev) =>
+        prev.map((sig) =>
+          sig.id === updatedSignature.id ? updatedSignature : sig,
+        ),
       );
       if (onSignatureUpdate) {
         onSignatureUpdate(updatedSignature);
@@ -147,7 +154,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
   const handleSignatureDelete = useCallback(
     (signatureId: string) => {
-      setDocumentSignatures(prev => prev.filter(sig => sig.id !== signatureId));
+      setDocumentSignatures((prev) =>
+        prev.filter((sig) => sig.id !== signatureId),
+      );
       setSelectedSignatureId(null);
       if (onSignatureDelete) {
         onSignatureDelete(signatureId);
@@ -157,7 +166,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
   );
 
   const handleSignaturePlace = useCallback((signature: SignaturePosition) => {
-    setDocumentSignatures(prev => [...prev, signature]);
+    setDocumentSignatures((prev) => [...prev, signature]);
     setSigningMode(false);
     setSelectedSavedSignature(null);
   }, []);
@@ -233,7 +242,65 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
       onSignaturePlace(signaturePosition);
     },
-    [selectedSignature, selectedSignatureId, currentPage, onSignaturePlace, signingMode, selectedSavedSignature, handleSignaturePlace],
+    [
+      selectedSignature,
+      selectedSignatureId,
+      currentPage,
+      onSignaturePlace,
+      signingMode,
+      selectedSavedSignature,
+      handleSignaturePlace,
+    ],
+  );
+
+  // Handle touch events for mobile signature placement
+  const handleCanvasTouch = useCallback(
+    (event: React.TouchEvent<HTMLCanvasElement>) => {
+      // Deselect any selected signatures when touching on empty space
+      if (selectedSignatureId) {
+        setSelectedSignatureId(null);
+      }
+
+      // Handle signature placement in signing mode
+      if (signingMode && selectedSavedSignature) {
+        // Check if touch is on an existing signature overlay
+        const target = event.target as HTMLElement;
+        if (target.closest('.signature-overlay')) {
+          return; // Don't place signature if touching on existing overlay
+        }
+
+        const canvas = event.currentTarget;
+        const rect = canvas.getBoundingClientRect();
+        const touch = event.touches[0];
+        const touchX = touch.clientX - rect.left;
+        const touchY = touch.clientY - rect.top;
+
+        // Convert touch coordinates to actual canvas coordinates
+        const canvasX = (touchX / rect.width) * canvas.width;
+        const canvasY = (touchY / rect.height) * canvas.height;
+
+        const signaturePosition: SignaturePosition = {
+          id: Date.now().toString(),
+          x: canvasX - 50, // Center the signature
+          y: canvasY - 25,
+          width: 100,
+          height: 50,
+          pageNumber: currentPage,
+          signatureData: selectedSavedSignature,
+          timestamp: Date.now(),
+        };
+
+        handleSignaturePlace(signaturePosition);
+        return;
+      }
+    },
+    [
+      selectedSignatureId,
+      signingMode,
+      selectedSavedSignature,
+      currentPage,
+      handleSignaturePlace,
+    ],
   );
 
   // Handle save signed PDF
@@ -299,8 +366,12 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
     setSavingPDF(true);
     try {
-      const signedPDFBlob = await pdfService.generateSignedPDF(file, documentSignatures, scale);
-      
+      const signedPDFBlob = await pdfService.generateSignedPDF(
+        file,
+        documentSignatures,
+        scale,
+      );
+
       // Download the signed PDF
       const url = URL.createObjectURL(signedPDFBlob);
       const a = document.createElement('a');
@@ -310,7 +381,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      
+
       if (onSaveSignedPDF) {
         onSaveSignedPDF(signedPDFBlob);
       }
@@ -486,32 +557,36 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
         </div>
 
         <div className="flex items-center space-x-2">
-          {/* Sign Document Button */}
+          {/* Sign Document Button - Desktop Only */}
           <Button
             variant="outline"
             size="sm"
             onClick={handleStartSigning}
-            className="flex items-center gap-2"
+            className="hidden sm:flex items-center gap-2"
           >
             <PenTool size={16} />
             Sign Document
           </Button>
-          
-          {/* Download Signed PDF Button */}
+
+          {/* Download Signed PDF Button - Desktop Only */}
           {documentSignatures.length > 0 && (
             <Button
               variant="outline"
               size="sm"
               onClick={handleDownloadSignedPDF}
               disabled={savingPDF}
-              className="flex items-center gap-2"
+              className="hidden sm:flex items-center gap-2"
               title="Download signed PDF"
             >
-              {savingPDF ? <LoadingSpinner size="sm" /> : <Download size={16} />}
+              {savingPDF ? (
+                <LoadingSpinner size="sm" />
+              ) : (
+                <Download size={16} />
+              )}
               Download Signed
             </Button>
           )}
-          
+
           {showDownload && (
             <Button
               variant="ghost"
@@ -570,11 +645,25 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
           <span className="text-sm font-medium px-2">
             <span style={{ color: 'var(--current-text)' }}>{currentPage}</span>
             <span className="text-secondary"> / {pdf.numPages}</span>
-            {(signaturesOnCurrentPage.length > 0 || documentSignatures.filter(sig => sig.pageNumber === currentPage).length > 0) && (
+            {(signaturesOnCurrentPage.length > 0 ||
+              documentSignatures.filter((sig) => sig.pageNumber === currentPage)
+                .length > 0) && (
               <span className="text-secondary">
                 {' '}
-                ({signaturesOnCurrentPage.length + documentSignatures.filter(sig => sig.pageNumber === currentPage).length} signature
-                {signaturesOnCurrentPage.length + documentSignatures.filter(sig => sig.pageNumber === currentPage).length !== 1 ? 's' : ''})
+                (
+                {signaturesOnCurrentPage.length +
+                  documentSignatures.filter(
+                    (sig) => sig.pageNumber === currentPage,
+                  ).length}{' '}
+                signature
+                {signaturesOnCurrentPage.length +
+                  documentSignatures.filter(
+                    (sig) => sig.pageNumber === currentPage,
+                  ).length !==
+                1
+                  ? 's'
+                  : ''}
+                )
               </span>
             )}
           </span>
@@ -618,17 +707,17 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
         </div>
       </div>
 
-      {/* PDF Content */}
+      {/* PDF Content - Mobile Optimized */}
       <div
-        className="flex-1 overflow-auto p-4 bg-gray-50"
+        className="flex-1 overflow-auto p-2 bg-gray-50"
         style={{
           backgroundColor: 'var(--current-bg)',
-          maxHeight: `calc(${maxHeight} - 120px)`,
+          maxHeight: `calc(${maxHeight} - 200px)`,
         }}
         ref={containerRef}
       >
         <div className="flex justify-center">
-          <div className="relative">
+          <div className="relative w-full max-w-full">
             <AnimatePresence mode="wait">
               {currentPageData ? (
                 <motion.div
@@ -637,19 +726,22 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
                   transition={{ duration: 0.2 }}
-                  className="relative"
+                  className="relative w-full"
                 >
                   <canvas
-                    className={`max-w-full h-auto border border-gray-300 rounded-lg shadow-sm ${
+                    className={`w-full h-auto border border-gray-300 rounded-lg shadow-sm ${
                       selectedSignature || signingMode ? 'cursor-crosshair' : ''
                     }`}
                     onClick={handleCanvasClick}
+                    onTouchStart={handleCanvasTouch}
                     style={{
                       backgroundColor: 'white',
                       borderColor: 'var(--current-border)',
                       width: currentPageData.width * scale,
                       height: currentPageData.height * scale,
                       display: 'block',
+                      maxWidth: '100%',
+                      touchAction: 'pan-x pan-y',
                     }}
                     ref={(canvas) => {
                       if (canvas && currentPageData) {
@@ -697,7 +789,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
                   {/* Signature placement hint */}
                   {(selectedSignature || signingMode) && (
                     <div className="absolute top-2 left-2 bg-blue-500 text-white px-2 py-1 rounded text-xs">
-                      {signingMode ? 'Click on the document to place your signature' : 'Click on the document to place your signature'}
+                      {signingMode
+                        ? 'Click on the document to place your signature'
+                        : 'Click on the document to place your signature'}
                     </div>
                   )}
                 </motion.div>
@@ -707,64 +801,91 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
         </div>
       </div>
 
-      {/* Signature Options Modal */}
+      {/* Mobile Signature Options Modal */}
       {showSignatureOptions && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-gray-900 rounded-lg p-6 w-full max-w-md border border-border shadow-2xl">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Choose Signature Option</h3>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 z-[9999] pdf-viewer-modal-overlay">
+          <motion.div
+            initial={{ opacity: 0, y: 100 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 100 }}
+            className="bg-white dark:bg-gray-900 rounded-t-2xl sm:rounded-lg p-4 w-full max-w-md border border-border shadow-2xl max-h-[80vh] overflow-hidden flex flex-col"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between mb-4 pb-2 border-b">
+              <h3 className="text-lg font-semibold">Choose Signature</h3>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setShowSignatureOptions(false)}
-                className="p-1 h-auto w-auto"
+                className="p-1 h-8 w-8"
               >
-                <X size={20} />
+                <X size={16} />
               </Button>
             </div>
 
-            <div className="space-y-4">
+            {/* Content */}
+            <div className="space-y-3 flex-1 overflow-y-auto">
+              {/* Create New Button */}
               <Button
                 onClick={handleCreateNewSignature}
                 className="w-full flex items-center gap-3 p-4 border border-border rounded-lg hover:bg-muted transition-colors"
                 variant="outline"
               >
-                <Plus size={20} />
+                <Plus size={18} />
                 <div className="text-left">
                   <div className="font-medium">Create New Signature</div>
-                  <div className="text-sm text-muted-foreground">Draw a new signature</div>
+                  <div className="text-sm text-muted-foreground">
+                    Draw a new signature
+                  </div>
                 </div>
               </Button>
 
+              {/* Existing Signatures */}
               {savedSignatures.length > 0 && (
                 <>
-                  <div className="text-sm font-medium text-muted-foreground">Or choose from existing signatures:</div>
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                  <div className="text-sm font-medium text-muted-foreground pt-2">
+                    Saved Signatures ({savedSignatures.length}):
+                  </div>
+                  <div className="space-y-2">
                     {savedSignatures.map((signature) => (
                       <button
                         key={signature.id}
-                        onClick={() => handleSelectExistingSignature(signature.dataURL)}
-                        className="w-full p-3 border border-border rounded-lg hover:bg-muted transition-colors flex items-center gap-3"
+                        onClick={() =>
+                          handleSelectExistingSignature(signature.dataURL)
+                        }
+                        className="w-full p-3 border border-border rounded-lg hover:bg-muted transition-colors flex items-center gap-3 text-left"
                       >
-                        <div className="w-16 h-8 bg-background border rounded flex items-center justify-center overflow-hidden">
+                        <div className="w-16 h-8 bg-background border rounded flex items-center justify-center overflow-hidden flex-shrink-0">
                           <img
                             src={signature.dataURL}
                             alt={signature.name}
                             className="max-w-full max-h-full object-contain"
                           />
                         </div>
-                        <div className="text-left flex-1">
-                          <div className="font-medium text-sm">{signature.name}</div>
-                          <div className="text-xs text-muted-foreground">Created: {signature.createdAt}</div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm truncate">
+                            {signature.name}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Created: {signature.createdAt}
+                          </div>
                         </div>
-                        <Check size={16} className="text-green-500" />
+                        <Check size={16} className="text-green-600 opacity-0" />
                       </button>
                     ))}
                   </div>
                 </>
               )}
+
+              {savedSignatures.length === 0 && (
+                <div className="text-center py-8 text-muted-foreground">
+                  <PenTool size={32} className="mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No saved signatures found.</p>
+                  <p className="text-xs">Create your first signature above.</p>
+                </div>
+              )}
             </div>
-          </div>
+          </motion.div>
         </div>
       )}
 
@@ -774,6 +895,135 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
         onSave={handleSignaturePadSave}
         onCancel={handleSignaturePadCancel}
       />
+
+      {/* Mobile Floating Action Button */}
+      <div className="sm:hidden">
+        {/* FAB */}
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => setShowMobileActions(true)}
+          className="fixed bottom-6 right-6 w-14 h-14 bg-primary text-primary-foreground rounded-full shadow-lg hover:shadow-xl transition-shadow z-40 flex items-center justify-center"
+          style={{
+            backgroundColor: 'var(--primary)',
+            color: 'var(--primary-foreground)',
+          }}
+        >
+          <PenTool size={24} />
+        </motion.button>
+
+        {/* Mobile Actions Modal */}
+        <AnimatePresence>
+          {showMobileActions && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-end justify-center z-[9999] pdf-viewer-modal-overlay">
+              <motion.div
+                initial={{ opacity: 0, y: 100 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 100 }}
+                className="bg-white dark:bg-gray-900 rounded-t-2xl p-6 w-full max-w-md border border-border shadow-2xl"
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-semibold">Document Actions</h3>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowMobileActions(false)}
+                    className="p-1 h-8 w-8"
+                  >
+                    <X size={16} />
+                  </Button>
+                </div>
+
+                {/* Actions */}
+                <div className="space-y-3">
+                  {/* Sign Document */}
+                  <Button
+                    onClick={() => {
+                      setShowMobileActions(false);
+                      handleStartSigning();
+                    }}
+                    className="w-full flex items-center gap-3 p-4 text-left justify-start"
+                    variant="outline"
+                  >
+                    <PenTool size={20} />
+                    <div>
+                      <div className="font-medium">Sign Document</div>
+                      <div className="text-sm text-muted-foreground">
+                        Add your signature to this document
+                      </div>
+                    </div>
+                  </Button>
+
+                  {/* Download Signed PDF */}
+                  {documentSignatures.length > 0 && (
+                    <Button
+                      onClick={() => {
+                        setShowMobileActions(false);
+                        handleDownloadSignedPDF();
+                      }}
+                      disabled={savingPDF}
+                      className="w-full flex items-center gap-3 p-4 text-left justify-start"
+                      variant="outline"
+                    >
+                      {savingPDF ? (
+                        <LoadingSpinner size="sm" />
+                      ) : (
+                        <Download size={20} />
+                      )}
+                      <div>
+                        <div className="font-medium">Download Signed PDF</div>
+                        <div className="text-sm text-muted-foreground">
+                          Save the signed document
+                        </div>
+                      </div>
+                    </Button>
+                  )}
+
+                  {/* Download Original */}
+                  {showDownload && (
+                    <Button
+                      onClick={() => {
+                        setShowMobileActions(false);
+                        handleDownload();
+                      }}
+                      className="w-full flex items-center gap-3 p-4 text-left justify-start"
+                      variant="outline"
+                    >
+                      <Download size={20} />
+                      <div>
+                        <div className="font-medium">Download Original</div>
+                        <div className="text-sm text-muted-foreground">
+                          Download the original document
+                        </div>
+                      </div>
+                    </Button>
+                  )}
+
+                  {/* Document Info */}
+                  <div className="pt-4 border-t">
+                    <div className="text-sm text-muted-foreground">
+                      <div className="flex items-center gap-2 mb-1">
+                        <FileText size={16} />
+                        <span>{file.name}</span>
+                      </div>
+                      <div className="ml-6">
+                        Size: {(file.size / 1024 / 1024).toFixed(1)} MB
+                      </div>
+                      <div className="ml-6">Pages: {pdf.numPages}</div>
+                      {documentSignatures.length > 0 && (
+                        <div className="ml-6">
+                          Signatures: {documentSignatures.length}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+      </div>
     </motion.div>
   );
 };
