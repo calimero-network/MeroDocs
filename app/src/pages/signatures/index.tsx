@@ -1,23 +1,61 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { PenTool, Plus, Trash2, Edit3 } from 'lucide-react';
 import { MobileLayout } from '../../components/MobileLayout';
+import SignaturePadComponent from '../../components/SignaturePad';
+
+interface SavedSignature {
+  id: string;
+  name: string;
+  dataURL: string;
+  createdAt: string;
+}
 
 export default function SignaturesPage() {
-  // Mock data - replace with real data later
-  const signatures: any[] = [];
+  const [signatures, setSignatures] = useState<SavedSignature[]>([]);
+  const [showSignaturePad, setShowSignaturePad] = useState(false);
+
+  // Load signatures from localStorage on component mount
+  useEffect(() => {
+    const savedSignatures = localStorage.getItem('signatures');
+    if (savedSignatures) {
+      try {
+        setSignatures(JSON.parse(savedSignatures));
+      } catch (error) {
+        console.error('Error loading signatures:', error);
+      }
+    }
+  }, []);
+
+  // Save signatures to localStorage whenever signatures change
+  useEffect(() => {
+    localStorage.setItem('signatures', JSON.stringify(signatures));
+  }, [signatures]);
 
   const handleCreateSignature = () => {
-    alert('Create signature functionality coming soon!');
+    setShowSignaturePad(true);
   };
 
-  const handleEditSignature = (id: string) => {
-    alert(`Edit signature ${id} coming soon!`);
+  const handleSaveSignature = (signatureData: string) => {
+    const newSignature: SavedSignature = {
+      id: Date.now().toString(),
+      name: `Signature ${signatures.length + 1}`,
+      dataURL: signatureData,
+      createdAt: new Date().toLocaleDateString(),
+    };
+
+    setSignatures((prev) => [...prev, newSignature]);
+    setShowSignaturePad(false);
   };
+
+  const handleCancelSignature = () => {
+    setShowSignaturePad(false);
+  };
+
 
   const handleDeleteSignature = (id: string) => {
     // eslint-disable-next-line no-restricted-globals
     if (confirm('Are you sure you want to delete this signature?')) {
-      alert(`Delete signature ${id} coming soon!`);
+      setSignatures((prev) => prev.filter((sig) => sig.id !== id));
     }
   };
 
@@ -46,18 +84,17 @@ export default function SignaturesPage() {
 
       {signatures.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-4">
-          {signatures.map((signature: any, index) => (
+          {signatures.map((signature) => (
             <div
-              key={index}
+              key={signature.id}
               className="bg-card border border-current rounded-xl p-6 transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:shadow-large hover:border-primary"
             >
-              <div
-                className="h-20 bg-surface border border-current rounded-lg mb-4 flex items-center justify-center italic text-secondary bg-opacity-50"
-                style={{
-                  backgroundImage: `url("data:image/svg+xml,%3csvg width='100' height='20' xmlns='http://www.w3.org/2000/svg'%3e%3cdefs%3e%3cpattern id='grid' width='10' height='10' patternUnits='userSpaceOnUse'%3e%3cpath d='M 10 0 L 0 0 0 10' fill='none' stroke='%23e9ecef' stroke-width='0.5'/%3e%3c/pattern%3e%3c/defs%3e%3crect width='100' height='20' fill='url(%23grid)' /%3e%3c/svg%3e")`,
-                }}
-              >
-                {signature.preview || 'Signature Preview'}
+              <div className="h-20 bg-surface border border-current rounded-lg mb-4 flex items-center justify-center overflow-hidden">
+                <img
+                  src={signature.dataURL}
+                  alt={signature.name}
+                  className="max-w-full max-h-full object-contain"
+                />
               </div>
               <div className="text-lg font-semibold text-current mb-2">
                 {signature.name}
@@ -66,13 +103,6 @@ export default function SignaturesPage() {
                 Created: {signature.createdAt}
               </div>
               <div className="flex gap-2">
-                <button
-                  onClick={() => handleEditSignature(signature.id)}
-                  className="flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded border border-current bg-card text-current text-sm cursor-pointer transition-all duration-200 min-h-[36px] hover:opacity-90 hover:-translate-y-0.5 active:translate-y-0"
-                >
-                  <Edit3 size={16} />
-                  Edit
-                </button>
                 <button
                   onClick={() => handleDeleteSignature(signature.id)}
                   className="flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded border border-red-500 bg-red-500 text-white text-sm cursor-pointer transition-all duration-200 min-h-[36px] hover:opacity-90 hover:-translate-y-0.5 active:translate-y-0"
@@ -102,6 +132,13 @@ export default function SignaturesPage() {
           </button>
         </div>
       )}
+
+      {/* Signature Pad Component */}
+      <SignaturePadComponent
+        isOpen={showSignaturePad}
+        onSave={handleSaveSignature}
+        onCancel={handleCancelSignature}
+      />
     </MobileLayout>
   );
 }
