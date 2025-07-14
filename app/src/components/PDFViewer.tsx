@@ -101,9 +101,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
     setError(null);
 
     try {
-      console.log('Loading PDF file:', file.name, file.type, file.size);
+   
       const pdfDoc = await pdfService.loadPDF(file);
-      console.log('PDF loaded successfully:', pdfDoc.numPages, 'pages');
+     
       setPdf(pdfDoc);
       setCurrentPage(1);
     } catch (err) {
@@ -123,9 +123,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
     if (!pdf) return;
 
     try {
-      console.log('Rendering pages for PDF with', pdf.numPages, 'pages');
+     
       const renderedPages = await pdfService.renderAllPages(pdf, scale);
-      console.log('Pages rendered successfully');
+  
       setPages(renderedPages);
     } catch (err) {
       console.error('Error rendering pages:', err);

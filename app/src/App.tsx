@@ -22,7 +22,6 @@ export default function App() {
             <Route path="/context" element={<ContextPage />} />
             <Route path="/agreement" element={<AgreementPage />} />
             <Route path="/signatures" element={<SignaturesPage />} />
-            {/* Catch-all route redirects to dashboard */}
             <Route path="*" element={<Dashboard />} />
           </Routes>
         </BrowserRouter>

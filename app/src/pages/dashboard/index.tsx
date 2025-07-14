@@ -32,19 +32,18 @@ export default function Dashboard() {
   const [agreementName, setAgreementName] = useState('');
 
   useEffect(() => {
-    // Check if app is configured first
+  
     if (!url || !applicationId) {
       navigate('/setup');
       return;
     }
 
-    // Then check if user is authenticated
     if (!accessToken || !refreshToken) {
       navigate('/auth');
     }
   }, [accessToken, applicationId, navigate, refreshToken, url]);
 
-  // Clean mock data for agreements
+  // Mock data for agreements
   const mockContexts = [
     {
       id: '1',
@@ -96,11 +95,10 @@ export default function Dashboard() {
 
   const handleCreateAgreement = () => {
     if (agreementName.trim()) {
-      // Create agreement in your backend
-      console.log('Creating agreement:', agreementName);
+     
       setShowCreateModal(false);
       setAgreementName('');
-      // Navigate to the agreement page or show success message
+      
       navigate('/agreement');
     }
   };
@@ -224,7 +222,7 @@ export default function Dashboard() {
                         className="p-1 h-5 w-5 sm:h-6 sm:w-6 opacity-0 group-hover:opacity-100 transition-opacity"
                         onClick={(e) => {
                           e.stopPropagation();
-                          // Handle context menu
+                        
                         }}
                       >
                         <MoreVertical className="w-2.5 h-2.5 sm:w-3 sm:h-3" />

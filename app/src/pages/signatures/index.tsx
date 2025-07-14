@@ -14,7 +14,7 @@ export default function SignaturesPage() {
   const [signatures, setSignatures] = useState<SavedSignature[]>([]);
   const [showSignaturePad, setShowSignaturePad] = useState(false);
 
-  // Load signatures from localStorage on component mount
+  // Load signatures from localStorage 
   useEffect(() => {
     const savedSignatures = localStorage.getItem('signatures');
     if (savedSignatures) {
@@ -26,7 +26,7 @@ export default function SignaturesPage() {
     }
   }, []);
 
-  // Save signatures to localStorage whenever signatures change
+  // Save signatures to localStorage 
   useEffect(() => {
     localStorage.setItem('signatures', JSON.stringify(signatures));
   }, [signatures]);

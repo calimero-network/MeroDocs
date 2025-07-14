@@ -4,9 +4,6 @@ import { jsPDF } from 'jspdf';
 // Configure PDF.js worker for version 5.x
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.3.93/pdf.worker.min.mjs`;
 
-console.log('PDF.js version:', pdfjsLib.version);
-console.log('PDF.js worker configured');
-
 export interface PDFPage {
   pageNumber: number;
   canvas: HTMLCanvasElement;
@@ -29,35 +26,18 @@ export interface SignaturePosition {
 class PDFService {
   async loadPDF(file: File): Promise<pdfjsLib.PDFDocumentProxy> {
     try {
-      console.log(
-        'Loading PDF file:',
-        file.name,
-        'Size:',
-        file.size,
-        'Type:',
-        file.type,
-      );
-
       const arrayBuffer = await file.arrayBuffer();
-      console.log(
-        'File converted to ArrayBuffer, size:',
-        arrayBuffer.byteLength,
-      );
 
       const loadingTask = pdfjsLib.getDocument({
         data: arrayBuffer,
-        // Remove cMap settings that might cause issues
       });
 
-      console.log('Loading task created, waiting for promise...');
       const doc = await loadingTask.promise;
 
-      console.log('PDF loaded successfully! Pages:', doc.numPages);
       return doc;
     } catch (error) {
       console.error('Detailed error loading PDF:', error);
 
-      // Provide more specific error messages
       if (error instanceof Error) {
         if (error.message.includes('Invalid PDF')) {
           throw new Error('The uploaded file is not a valid PDF document.');
@@ -139,24 +119,10 @@ class PDFService {
     const context = canvas.getContext('2d');
     if (!context) return;
 
-    console.log('Adding signature to canvas:', {
-      signatureCoords: {
-        x: signature.x,
-        y: signature.y,
-        width: signature.width,
-        height: signature.height,
-      },
-      scale,
-      canvasSize: { width: canvas.width, height: canvas.height },
-      note: 'Signature coordinates are in canvas coordinate system (not scaled)',
-    });
-
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.onload = () => {
         try {
-          // The signature positions are in canvas coordinates, use them directly
-          // (scale parameter is only used for rendering resolution, not coordinate conversion)
           context.drawImage(
             img,
             signature.x,
@@ -164,12 +130,6 @@ class PDFService {
             signature.width,
             signature.height,
           );
-          console.log('Signature successfully drawn on canvas at:', {
-            x: signature.x,
-            y: signature.y,
-            width: signature.width,
-            height: signature.height,
-          });
           resolve();
         } catch (error) {
           console.error('Error drawing signature on canvas:', error);
@@ -189,52 +149,19 @@ class PDFService {
     signatures: SignaturePosition[],
     renderScale: number = 1.5,
   ): Promise<Blob> {
-    console.log('Generating signed PDF with', signatures.length, 'signatures');
-    console.log('Render scale:', renderScale);
-
     const pdf = await this.loadPDF(originalFile);
 
-    // Render pages at higher resolution for better quality
     const pages = await this.renderAllPages(pdf, renderScale);
-    console.log(
-      'Rendered pages:',
-      pages.map((p) => ({
-        page: p.pageNumber,
-        width: p.width,
-        height: p.height,
-      })),
-    );
 
-    // Add signatures to pages - wait for all signatures to be added
     const signaturePromises = signatures.map(async (signature) => {
       const page = pages.find((p) => p.pageNumber === signature.pageNumber);
       if (page) {
-        console.log(
-          'Adding signature to page',
-          signature.pageNumber,
-          'at PDF coordinates:',
-          {
-            x: signature.x,
-            y: signature.y,
-            width: signature.width,
-            height: signature.height,
-          },
-        );
-        console.log('Page dimensions:', {
-          width: page.width,
-          height: page.height,
-        });
-
-        // The signature positions are in PDF coordinates, scale them for the rendered canvas
         await this.addSignatureToCanvas(page.canvas, signature, renderScale);
       }
     });
 
-    // Wait for all signatures to be added
     await Promise.all(signaturePromises);
-    console.log('All signatures added to canvases');
 
-    // Create new PDF with signed pages
     const signedPdf = new jsPDF({
       orientation: 'portrait',
       unit: 'px',
@@ -250,7 +177,6 @@ class PDFService {
       signedPdf.addImage(imgData, 'PNG', 0, 0, pages[i].width, pages[i].height);
     }
 
-    console.log('Signed PDF generated successfully');
     return signedPdf.output('blob');
   }
 
@@ -268,8 +194,6 @@ class PDFService {
   // Test function to verify PDF.js is working
   async testPDFJS(): Promise<boolean> {
     try {
-      console.log('Testing PDF.js configuration...');
-
       // Create a simple test PDF
       const testPDF = new jsPDF();
       testPDF.text('Test PDF for verification', 10, 10);

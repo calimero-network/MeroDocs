@@ -96,7 +96,7 @@ const AgreementPage: React.FC = () => {
     useState<UploadedDocument | null>(null);
   const [showPDFViewer, setShowPDFViewer] = useState(false);
 
-  // Mock data - in production, this would come from API/context
+  // Mock data 
   const currentAgreement: AgreementData = useMemo(
     () => ({
       id: '1',
@@ -119,7 +119,6 @@ const AgreementPage: React.FC = () => {
     [documents, searchQuery],
   );
 
-  // Authentication and configuration check
   useEffect(() => {
     const url = getAppEndpointKey();
     const applicationId = getApplicationId();
@@ -136,7 +135,7 @@ const AgreementPage: React.FC = () => {
     }
   }, [navigate]);
 
-  // Event handlers
+
   const handleFileUpload = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
       const files = event.target.files;
@@ -165,7 +164,7 @@ const AgreementPage: React.FC = () => {
         fileInputRef.current.value = '';
       }
 
-      // Close upload modal and show success message
+     
       setShowUploadModal(false);
       if (uploadedCount > 0) {
         const message =

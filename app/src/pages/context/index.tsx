@@ -19,13 +19,11 @@ export default function ContextPage() {
     const accessToken = getAccessToken();
     const refreshToken = getRefreshToken();
 
-    // Check if app is configured first
     if (!url || !applicationId) {
       navigate('/setup');
       return;
     }
 
-    // Then check if user is authenticated
     if (!accessToken || !refreshToken) {
       navigate('/auth');
     }

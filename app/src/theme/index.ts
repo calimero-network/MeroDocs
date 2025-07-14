@@ -102,5 +102,4 @@ export const getTheme = (mode: ThemeMode) => ({
   ...commonTheme,
 });
 
-// Default export for backward compatibility
 export const theme = getTheme('dark');
