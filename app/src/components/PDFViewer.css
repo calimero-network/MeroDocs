@@ -147,7 +147,7 @@
 
   /* Apply to all modal overlays */
   .pdf-viewer-modal-overlay,
-  [class*="z-[9999]"] {
+  [class*='z-[9999]'] {
     z-index: 9999 !important;
   }
 

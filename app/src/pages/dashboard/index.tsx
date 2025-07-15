@@ -20,9 +20,11 @@ import {
 import { motion } from 'framer-motion';
 import { Button, Card, CardContent } from '../../components/ui';
 import { MobileLayout } from '../../components/MobileLayout';
+import { useTheme } from '../../contexts/ThemeContext';
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { mode } = useTheme();
   const url = getAppEndpointKey();
   const applicationId = getApplicationId();
   const accessToken = getAccessToken();
@@ -32,7 +34,6 @@ export default function Dashboard() {
   const [agreementName, setAgreementName] = useState('');
 
   useEffect(() => {
-  
     if (!url || !applicationId) {
       navigate('/setup');
       return;
@@ -95,10 +96,9 @@ export default function Dashboard() {
 
   const handleCreateAgreement = () => {
     if (agreementName.trim()) {
-     
       setShowCreateModal(false);
       setAgreementName('');
-      
+
       navigate('/agreement');
     }
   };
@@ -222,7 +222,6 @@ export default function Dashboard() {
                         className="p-1 h-5 w-5 sm:h-6 sm:w-6 opacity-0 group-hover:opacity-100 transition-opacity"
                         onClick={(e) => {
                           e.stopPropagation();
-                        
                         }}
                       >
                         <MoreVertical className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
@@ -270,7 +269,9 @@ export default function Dashboard() {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="bg-white dark:bg-gray-900 rounded-lg p-6 w-full max-w-md border border-border shadow-2xl"
+            className={`rounded-lg p-6 w-full max-w-md border border-border shadow-2xl ${
+              mode === 'dark' ? 'bg-gray-900' : 'bg-white'
+            }`}
           >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-foreground">

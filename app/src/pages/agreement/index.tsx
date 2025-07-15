@@ -27,6 +27,7 @@ import { motion } from 'framer-motion';
 import { Button, Card, CardContent } from '../../components/ui';
 import { MobileLayout } from '../../components/MobileLayout';
 import PDFViewer from '../../components/PDFViewer';
+import { useTheme } from '../../contexts/ThemeContext';
 
 // Constants
 
@@ -82,6 +83,7 @@ const generateInvitePayload = (): string => {
 const AgreementPage: React.FC = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { mode } = useTheme();
 
   // State management
   const [searchQuery, setSearchQuery] = useState('');
@@ -96,7 +98,7 @@ const AgreementPage: React.FC = () => {
     useState<UploadedDocument | null>(null);
   const [showPDFViewer, setShowPDFViewer] = useState(false);
 
-  // Mock data 
+  // Mock data
   const currentAgreement: AgreementData = useMemo(
     () => ({
       id: '1',
@@ -135,7 +137,6 @@ const AgreementPage: React.FC = () => {
     }
   }, [navigate]);
 
-
   const handleFileUpload = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
       const files = event.target.files;
@@ -164,7 +165,6 @@ const AgreementPage: React.FC = () => {
         fileInputRef.current.value = '';
       }
 
-     
       setShowUploadModal(false);
       if (uploadedCount > 0) {
         const message =
@@ -260,16 +260,18 @@ const AgreementPage: React.FC = () => {
             variants={ANIMATION_VARIANTS.item}
             initial="hidden"
             animate="visible"
-            className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4"
+            className="bg-green-100 dark:bg-green-900/20 border border-green-300 dark:border-green-800 rounded-lg p-4"
           >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-medium text-blue-900 dark:text-blue-300">
+              <h3
+                className={`font-medium ${mode === 'dark' ? 'text-green-300' : 'text-green-900'}`}
+              >
                 Participants
               </h3>
               <Button
                 onClick={() => setShowInviteModal(true)}
                 size="sm"
-                className="bg-blue-600 hover:bg-blue-700 text-white"
+                className="bg-green-600 hover:bg-green-700 text-white"
               >
                 <Plus className="w-4 h-4 mr-1" />
                 Invite
@@ -277,7 +279,7 @@ const AgreementPage: React.FC = () => {
             </div>
             <div className="space-y-3">
               <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
                   <span className="text-white text-sm font-medium">JD</span>
                 </div>
                 <div>
@@ -419,7 +421,9 @@ const AgreementPage: React.FC = () => {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="bg-white dark:bg-gray-900 rounded-lg p-6 w-full max-w-md border border-border shadow-2xl"
+            className={`rounded-lg p-6 w-full max-w-md border border-border shadow-2xl ${
+              mode === 'dark' ? 'bg-gray-900' : 'bg-white'
+            }`}
           >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-foreground">
@@ -477,7 +481,9 @@ const AgreementPage: React.FC = () => {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="bg-white dark:bg-gray-900 rounded-lg p-6 w-full max-w-md border border-border shadow-2xl"
+            className={`rounded-lg p-6 w-full max-w-md border border-border shadow-2xl ${
+              mode === 'dark' ? 'bg-gray-900' : 'bg-white'
+            }`}
           >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-foreground">
@@ -530,7 +536,9 @@ const AgreementPage: React.FC = () => {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="bg-white dark:bg-gray-900 rounded-lg p-6 w-full max-w-md border border-border shadow-2xl"
+            className={`rounded-lg p-6 w-full max-w-md border border-border shadow-2xl ${
+              mode === 'dark' ? 'bg-gray-900' : 'bg-white'
+            }`}
           >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-foreground">

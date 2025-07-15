@@ -3,6 +3,7 @@ import SignaturePad from 'signature_pad';
 import { Save, RotateCcw, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from './ui';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface SignaturePadComponentProps {
   onSave: (signatureData: string) => void;
@@ -18,22 +19,14 @@ const SignaturePadComponent: React.FC<SignaturePadComponentProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [signaturePad, setSignaturePad] = useState<SignaturePad | null>(null);
   const [isEmpty, setIsEmpty] = useState(true);
+  const { mode } = useTheme();
 
   useEffect(() => {
     if (isOpen && canvasRef.current) {
       const canvas = canvasRef.current;
 
-      // Check if dark mode is active
-      const isDarkMode =
-        document.documentElement.classList.contains('dark') ||
-        document.documentElement.classList.contains('theme-dark');
-      
-      // Check if light mode is explicitly set
-      const isLightMode = document.documentElement.classList.contains('theme-light');
-      
-      // Use light theme colors if explicitly set, otherwise use dark theme detection
-      const backgroundColor = isLightMode ? '#ffffff' : (isDarkMode ? '#1a1d1f' : '#ffffff');
-      const penColor = isLightMode ? '#0e1011' : (isDarkMode ? '#e8e4e1' : '#0e1011');
+      const backgroundColor = '#ffffff';
+      const penColor = '#000000';
 
       const pad = new SignaturePad(canvas, {
         backgroundColor: backgroundColor,
@@ -41,37 +34,6 @@ const SignaturePadComponent: React.FC<SignaturePadComponentProps> = ({
         minWidth: 2,
         maxWidth: 4,
       });
-
-      const updateSignaturePadColors = () => {
-        // Check for theme classes
-        const isDark =
-          document.documentElement.classList.contains('dark') ||
-          document.documentElement.classList.contains('theme-dark');
-        const isLight = document.documentElement.classList.contains('theme-light');
-
-        // Use light theme colors if explicitly set, otherwise use dark theme detection
-        const newBgColor = isLight ? '#ffffff' : (isDark ? '#1a1d1f' : '#ffffff');
-        const newPenColor = isLight ? '#0e1011' : (isDark ? '#e8e4e1' : '#0e1011');
-
-        // Store current signature data
-        const currentData = pad.toData();
-
-        // Update colors
-        pad.penColor = newPenColor;
-        pad.backgroundColor = newBgColor;
-
-        // Clear and fill with new background
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.fillStyle = newBgColor;
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-        }
-
-        // Restore signature data if any
-        if (currentData.length > 0) {
-          pad.fromData(currentData);
-        }
-      };
 
       const resizeCanvas = () => {
         const ratio = Math.max(window.devicePixelRatio || 1, 1);
@@ -100,28 +62,16 @@ const SignaturePadComponent: React.FC<SignaturePadComponentProps> = ({
       // Initial resize and background setup
       setTimeout(() => {
         resizeCanvas();
-        // Force apply initial background color
+
         const ctx = canvas.getContext('2d');
         if (ctx) {
-          const isDark =
-            document.documentElement.classList.contains('dark') ||
-            document.documentElement.classList.contains('theme-dark');
-          const isLight = document.documentElement.classList.contains('theme-light');
-          
-          // Use light theme colors if explicitly set, otherwise use dark theme detection
-          const bgColor = isLight ? '#ffffff' : (isDark ? '#1a1d1f' : '#ffffff');
+          const bgColor = '#ffffff';
           ctx.fillStyle = bgColor;
           ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
       }, 100);
 
-      // Listen for theme changes
-      const observer = new MutationObserver(updateSignaturePadColors);
-      observer.observe(document.documentElement, {
-        attributes: true,
-        attributeFilter: ['class'],
-      });
-
+      // Listen for theme changes - now we'll rely on the useEffect dependency
       window.addEventListener('resize', resizeCanvas);
 
       pad.addEventListener('beginStroke', () => setIsEmpty(false));
@@ -142,7 +92,6 @@ const SignaturePadComponent: React.FC<SignaturePadComponentProps> = ({
 
       return () => {
         window.removeEventListener('resize', resizeCanvas);
-        observer.disconnect();
         pad.off();
       };
     }
@@ -159,7 +108,6 @@ const SignaturePadComponent: React.FC<SignaturePadComponentProps> = ({
     if (signaturePad && canvasRef.current) {
       signaturePad.clear();
 
-      // Manually apply background color after clearing
       const ctx = canvasRef.current.getContext('2d');
       if (ctx) {
         ctx.fillStyle = signaturePad.backgroundColor;
@@ -178,7 +126,9 @@ const SignaturePadComponent: React.FC<SignaturePadComponentProps> = ({
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="bg-white dark:bg-gray-900 rounded-lg p-6 w-full max-w-2xl border border-border shadow-2xl"
+            className={`rounded-lg p-6 w-full max-w-2xl border border-border shadow-2xl ${
+              mode === 'dark' ? 'bg-gray-900' : 'bg-white'
+            }`}
           >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-foreground">

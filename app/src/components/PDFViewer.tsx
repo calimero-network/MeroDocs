@@ -25,7 +25,7 @@ import SignatureOverlay from './SignatureOverlay';
 import SignaturePadComponent from './SignaturePad';
 import * as pdfjsLib from 'pdfjs-dist';
 import './PDFViewer.css';
-
+import { useTheme } from '../contexts/ThemeContext';
 // Types for saved signatures
 interface SavedSignature {
   id: string;
@@ -68,6 +68,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
   showSignatureControls = false,
   onSaveSignedPDF,
 }) => {
+  const { mode } = useTheme();
   const [pdf, setPdf] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const [pages, setPages] = useState<PDFPage[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -808,7 +809,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
             initial={{ opacity: 0, y: 100 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 100 }}
-            className="bg-white dark:bg-gray-900 rounded-t-2xl sm:rounded-lg p-4 w-full max-w-md border border-border shadow-2xl max-h-[80vh] overflow-hidden flex flex-col"
+            className={`rounded-t-2xl sm:rounded-lg p-4 w-full max-w-md border border-border shadow-2xl max-h-[80vh] overflow-hidden flex flex-col ${mode === 'dark' ? 'bg-gray-900' : 'bg-white'} ${
+              mode === 'dark' ? 'text-gray-200' : 'text-gray-800'
+            }`} 
           >
             {/* Header */}
             <div className="flex items-center justify-between mb-4 pb-2 border-b">
@@ -920,7 +923,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
                 initial={{ opacity: 0, y: 100 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 100 }}
-                className="bg-white dark:bg-gray-900 rounded-t-2xl p-6 w-full max-w-md border border-border shadow-2xl"
+                className={` rounded-t-2xl p-6 w-full max-w-md border border-border shadow-2xl ${mode === 'dark' ? 'bg-gray-900' : 'bg-white'} ${
+                  mode === 'dark' ? 'text-gray-200' : 'text-gray-800'
+                } `}
               >
                 {/* Header */}
                 <div className="flex items-center justify-between mb-6">
