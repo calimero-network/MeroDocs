@@ -9,6 +9,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 calimero-sdk = { git = "https://github.com/calimero-network/core", branch = "master" }
+calimero-storage = { git = "https://github.com/calimero-network/core", branch = "master" }
 serde = { version = "1.0", features = ["derive"] }
 
 [profile.app-release]
