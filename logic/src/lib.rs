@@ -5,6 +5,25 @@ use calimero_sdk::serde::{Deserialize, Serialize};
 use calimero_sdk::{app, env};
 use calimero_storage::collections::{UnorderedMap, UnorderedSet, Vector};
 
+mod types;
+use types::id::{BlobId, UserId};
+
+/// Safe base58 encoding for blob IDs using our own buffer
+fn encode_blob_id_base58(blob_id_bytes: &[u8; 32]) -> String {
+    let mut buf = [0u8; 44];
+    let len = bs58::encode(blob_id_bytes).onto(&mut buf[..]).unwrap();
+    std::str::from_utf8(&buf[..len]).unwrap().to_owned()
+}
+
+/// Safe serialization function for blob ID bytes that handles BufferTooSmall panics
+fn serialize_blob_id_bytes<S>(blob_id: &BlobId, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: calimero_sdk::serde::Serializer,
+{
+    let safe_string = encode_blob_id_base58(&**blob_id);
+    serializer.serialize_str(&safe_string)
+}
+
 /// Load complete blob data into memory (uses chunked reading internally)
 fn load_blob_full(blob_id_bytes: &[u8; 32]) -> Result<Option<Vec<u8>>, String> {
     let fd = env::blob_open(blob_id_bytes);
@@ -84,7 +103,8 @@ fn store_blob_chunked(data: &[u8]) -> Result<[u8; 32], String> {
 pub struct SignatureRecord {
     pub id: u64,
     pub name: String,
-    pub blob_id: [u8; 32], // Store PNG data as blob
+    #[serde(serialize_with = "serialize_blob_id_bytes")]
+    pub blob_id: BlobId, // Store PNG data as blob
     pub size: u64,
     pub created_at: u64,
 }
@@ -97,15 +117,6 @@ pub struct ContextAgreement {
     pub agreement_name: String,
     pub joined_at: u64,
 }
-
-/// User ID type
-pub type UserId = [u8; 32];
-
-/// Document ID type
-pub type DocumentId = String;
-
-/// Context ID type
-pub type ContextId = String;
 
 /// Participant roles in shared contexts
 #[derive(Debug, Clone, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
@@ -128,7 +139,7 @@ pub struct DocumentInfo {
     pub uploaded_by: UserId,
     pub uploaded_at: u64,
     pub status: DocumentStatus,
-    pub pdf_blob_id: [u8; 32],
+    pub pdf_blob_id: BlobId,
     pub size: u64,
 }
 
@@ -259,7 +270,8 @@ impl MeroDocsState {
         context_name: String,
         _creator_private_identity: Option<UserId>,
     ) -> MeroDocsState {
-        let owner = env::executor_id();
+        let owner_raw = env::executor_id();
+        let owner = UserId::new(owner_raw);
 
         let mut state = MeroDocsState {
             is_private,
@@ -296,7 +308,8 @@ impl MeroDocsState {
         self.signature_count += 1;
         let data_size = png_data.len() as u64;
 
-        let blob_id = store_blob_chunked(&png_data)?;
+        let blob_id_raw = store_blob_chunked(&png_data)?;
+        let blob_id = BlobId::new(blob_id_raw);
 
         let signature = SignatureRecord {
             id: signature_id,
@@ -367,7 +380,7 @@ impl MeroDocsState {
         };
 
         // Load PNG data from blob
-        let data = load_blob_full(&signature.blob_id)?
+        let data = load_blob_full(&*signature.blob_id)?
             .ok_or_else(|| format!("Signature blob not found: {}", signature_id))?;
 
         Ok(data)
@@ -485,7 +498,8 @@ impl MeroDocsState {
             return Err("Document with this ID already exists".to_string());
         }
 
-        let pdf_blob_id = store_blob_chunked(&pdf_data)?;
+        let pdf_blob_id_raw = store_blob_chunked(&pdf_data)?;
+        let pdf_blob_id = BlobId::new(pdf_blob_id_raw);
         let file_size = pdf_data.len() as u64;
 
         let document = DocumentInfo {
@@ -570,7 +584,8 @@ impl MeroDocsState {
             }
         }
 
-        let updated_pdf_blob_id = store_blob_chunked(&updated_pdf_data)?;
+        let updated_pdf_blob_id_raw = store_blob_chunked(&updated_pdf_data)?;
+        let updated_pdf_blob_id = BlobId::new(updated_pdf_blob_id_raw);
         let updated_size = updated_pdf_data.len() as u64;
 
         document.pdf_blob_id = updated_pdf_blob_id;
@@ -642,7 +657,7 @@ impl MeroDocsState {
             Err(e) => return Err(format!("Failed to get document: {:?}", e)),
         };
 
-        let data = load_blob_full(&document.pdf_blob_id)?
+        let data = load_blob_full(&*document.pdf_blob_id)?
             .ok_or_else(|| format!("Document PDF blob not found: {}", document_id))?;
 
         Ok(data)
