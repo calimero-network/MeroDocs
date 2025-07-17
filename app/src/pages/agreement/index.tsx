@@ -7,10 +7,9 @@ import React, {
 } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  getAccessToken,
   getAppEndpointKey,
   getApplicationId,
-  getRefreshToken,
+  blobClient,
 } from '@calimero-network/calimero-client';
 import {
   ArrowLeft,
@@ -22,12 +21,17 @@ import {
   Eye,
   X,
   Trash2,
+  Download,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Button, Card, CardContent } from '../../components/ui';
 import { MobileLayout } from '../../components/MobileLayout';
 import PDFViewer from '../../components/PDFViewer';
 import { useTheme } from '../../contexts/ThemeContext';
+import { DocumentService } from '../../api/documentService';
+import { ClientApiDataSource } from '../../api/dataSource/ClientApiDataSource';
+import { ContextApiDataSource } from '../../api/dataSource/nodeApiDataSource';
+import { ContextDetails } from '../../api/clientApi';
 
 // Constants
 
@@ -48,36 +52,45 @@ const ANIMATION_VARIANTS = {
   },
 } as const;
 
-// Types
 interface UploadedDocument {
   id: string;
   name: string;
   size: string;
-  file: File;
+  file?: File;
   uploadedAt: string;
-}
-
-interface AgreementData {
-  id: string;
-  name: string;
-  description: string;
-  participants: number;
   status: string;
-  owner: string;
-  created: string;
+  uploadedBy?: string;
+  hash?: string;
+  pdfBlobId?: string;
 }
 
-// Utility functions
-const formatFileSize = (bytes: number): string => {
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-};
+const generateInvitePayload = async (
+  nodeApiService: ContextApiDataSource,
+  contextId: string,
+  inviter: string,
+  invitee: string,
+): Promise<string> => {
+  try {
+    const response = await nodeApiService.inviteToContext({
+      contextId,
+      inviter,
+      invitee,
+    });
 
-const generateInvitePayload = (): string => {
-  return `INVITE_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    if (response && typeof response === 'object' && 'data' in response) {
+      return response.data as string;
+    }
+
+    if (typeof response === 'string') {
+      return response;
+    }
+
+    return JSON.stringify(response, null, 2);
+  } catch (error) {
+    console.error('Failed to generate invite:', error);
+
+    return `INVITE_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
 };
 
 const AgreementPage: React.FC = () => {
@@ -85,7 +98,10 @@ const AgreementPage: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { mode } = useTheme();
 
-  // State management
+  const documentService = useMemo(() => new DocumentService(), []);
+  const clientApiService = useMemo(() => new ClientApiDataSource(), []);
+  const nodeApiService = useMemo(() => new ContextApiDataSource(), []);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [showParticipants, setShowParticipants] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -93,26 +109,114 @@ const AgreementPage: React.FC = () => {
   const [generatedPayload, setGeneratedPayload] = useState('');
   const [showPayloadDialog, setShowPayloadDialog] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [generatingInvite, setGeneratingInvite] = useState(false);
   const [documents, setDocuments] = useState<UploadedDocument[]>([]);
   const [selectedDocument, setSelectedDocument] =
     useState<UploadedDocument | null>(null);
   const [showPDFViewer, setShowPDFViewer] = useState(false);
-
-  // Mock data
-  const currentAgreement: AgreementData = useMemo(
-    () => ({
-      id: '1',
-      name: 'Legal Team Workspace',
-      description: 'Contract management and legal document collaboration',
-      participants: 4,
-      status: 'active',
-      owner: 'Sarah Johnson',
-      created: '2 weeks ago',
-    }),
-    [],
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [loadingPDFPreview, setLoadingPDFPreview] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [contextDetails, setContextDetails] = useState<ContextDetails | null>(
+    null,
   );
+  const [contextLoading, setContextLoading] = useState(true);
 
-  // Memoized filtered documents
+  const currentContextId = useMemo(() => {
+    const storedContextId = localStorage.getItem('agreementContextID');
+
+    if (!storedContextId) {
+      console.warn('No agreement context ID found in localStorage');
+      navigate('/');
+      return null;
+    }
+    return storedContextId;
+  }, [navigate]);
+
+  const loadContextDetails = useCallback(async () => {
+    if (!currentContextId) return;
+
+    try {
+      setContextLoading(true);
+      setError(null);
+
+      const agreementContextID = localStorage.getItem('agreementContextID');
+      const agreementContextUserID = localStorage.getItem(
+        'agreementContextUserID',
+      );
+
+
+
+      const response = await clientApiService.getContextDetails(
+        currentContextId,
+        agreementContextID || undefined,
+        agreementContextUserID || undefined,
+      );
+
+      if (response.error) {
+        setError(response.error.message);
+        setContextDetails(null);
+      } else {
+
+        setContextDetails(response.data);
+      }
+    } catch (err) {
+      console.error('Failed to load context details:', err);
+      setError('Failed to load context details');
+      setContextDetails(null);
+    } finally {
+      setContextLoading(false);
+    }
+  }, [clientApiService, currentContextId]);
+
+  const loadDocuments = useCallback(async () => {
+    if (!currentContextId) return;
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      const agreementContextID = localStorage.getItem('agreementContextID');
+      const agreementContextUserID = localStorage.getItem(
+        'agreementContextUserID',
+      );
+
+
+
+      const response = await documentService.listDocuments(
+        currentContextId,
+        agreementContextID || undefined,
+        agreementContextUserID || undefined,
+      );
+
+      if (response.error) {
+        setError(response.error.message);
+        setDocuments([]);
+      } else {
+        const uploadedDocs: UploadedDocument[] = (response.data || []).map(
+          (doc) => ({
+            id: doc.id,
+            name: doc.name,
+            size: doc.size,
+            uploadedAt: doc.uploadedAt,
+            status: doc.status,
+            uploadedBy: doc.uploadedBy,
+            hash: doc.hash,
+            pdfBlobId: doc.pdfBlobId,
+          }),
+        );
+        setDocuments(uploadedDocs);
+      }
+    } catch (err) {
+      console.error('Failed to load documents:', err);
+      setError('Failed to load documents');
+      setDocuments([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [documentService, currentContextId]);
+
   const filteredDocuments = useMemo(
     () =>
       documents.filter((doc) =>
@@ -124,36 +228,60 @@ const AgreementPage: React.FC = () => {
   useEffect(() => {
     const url = getAppEndpointKey();
     const applicationId = getApplicationId();
-    const accessToken = getAccessToken();
-    const refreshToken = getRefreshToken();
 
     if (!url || !applicationId) {
       navigate('/setup');
       return;
     }
 
-    if (!accessToken || !refreshToken) {
-      navigate('/auth');
+    if (!currentContextId) {
+      console.error('No context ID available');
+      return;
     }
-  }, [navigate]);
+
+    loadContextDetails();
+    loadDocuments();
+  }, [navigate, loadContextDetails, loadDocuments, currentContextId]);
 
   const handleFileUpload = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>) => {
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
       const files = event.target.files;
-      if (!files) return;
+      if (!files || !currentContextId) return;
+
+      setUploading(true);
+      setError(null);
+
+      const agreementContextID = localStorage.getItem('agreementContextID');
+      const agreementContextUserID = localStorage.getItem(
+        'agreementContextUserID',
+      );
+
+
 
       let uploadedCount = 0;
-      Array.from(files).forEach((file) => {
+      const uploadPromises = Array.from(files).map(async (file) => {
         if (file.type === 'application/pdf') {
-          const newDocument: UploadedDocument = {
-            id: Math.random().toString(36).substring(2),
-            name: file.name,
-            size: formatFileSize(file.size),
-            file: file,
-            uploadedAt: new Date().toLocaleString(),
-          };
-          setDocuments((prev) => [...prev, newDocument]);
-          uploadedCount++;
+          try {
+            const response = await documentService.uploadDocument(
+              currentContextId,
+              file.name,
+              file,
+              agreementContextID || undefined,
+              agreementContextUserID || undefined,
+            );
+
+            if (response.error) {
+              console.error(`Failed to upload ${file.name}:`, response.error);
+              alert(
+                `Failed to upload "${file.name}": ${response.error.message}`,
+              );
+            } else {
+              uploadedCount++;
+            }
+          } catch (error) {
+            console.error(`Error uploading ${file.name}:`, error);
+            alert(`Error uploading "${file.name}"`);
+          }
         } else {
           alert(
             `"${file.name}" is not a PDF file. Please upload only PDF files.`,
@@ -161,20 +289,26 @@ const AgreementPage: React.FC = () => {
         }
       });
 
+      await Promise.all(uploadPromises);
+
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
 
       setShowUploadModal(false);
+      setUploading(false);
+
       if (uploadedCount > 0) {
         const message =
           uploadedCount === 1
             ? '1 document uploaded successfully!'
             : `${uploadedCount} documents uploaded successfully!`;
         alert(message);
+
+        await loadDocuments();
       }
     },
-    [],
+    [documentService, currentContextId, loadDocuments],
   );
 
   const handleUploadClick = useCallback(() => {
@@ -185,9 +319,35 @@ const AgreementPage: React.FC = () => {
     setDocuments((prev) => prev.filter((doc) => doc.id !== documentId));
   }, []);
 
-  const handleOpenDocument = useCallback((document: UploadedDocument) => {
-    setSelectedDocument(document);
-    setShowPDFViewer(true);
+  const handleOpenDocument = useCallback(async (document: UploadedDocument) => {
+    if (!document.pdfBlobId) {
+      alert('Document blob ID not available for preview');
+      return;
+    }
+
+    try {
+      setLoadingPDFPreview(true);
+
+
+      const blob = await blobClient.downloadBlob(document.pdfBlobId);
+
+      const file = new File([blob], document.name, { type: 'application/pdf' });
+
+      setSelectedDocument({
+        ...document,
+        file: file,
+      });
+      setShowPDFViewer(true);
+
+
+    } catch (error) {
+      console.error(`Failed to load PDF for preview: ${document.name}`, error);
+      alert(
+        `Failed to load PDF for preview: "${document.name}". Please try again.`,
+      );
+    } finally {
+      setLoadingPDFPreview(false);
+    }
   }, []);
 
   const handleClosePDFViewer = useCallback(() => {
@@ -195,12 +355,67 @@ const AgreementPage: React.FC = () => {
     setSelectedDocument(null);
   }, []);
 
-  const handleGenerateInvite = useCallback(() => {
-    const payload = generateInvitePayload();
-    setGeneratedPayload(payload);
-    setShowPayloadDialog(true);
-    setShowInviteModal(false);
+  const handleDownloadDocument = useCallback(async (doc: UploadedDocument) => {
+    if (!doc.pdfBlobId) {
+      alert('Document blob ID not available for download');
+      return;
+    }
+
+    try {
+
+
+      const blob = await blobClient.downloadBlob(doc.pdfBlobId);
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = doc.name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+
+    } catch (error) {
+      console.error(`Failed to download document: ${doc.name}`, error);
+      alert(`Failed to download "${doc.name}". Please try again.`);
+    }
   }, []);
+
+  const handleGenerateInvite = useCallback(async () => {
+    if (!currentContextId || !inviteId.trim()) {
+      alert('Please enter a valid invitee ID');
+      return;
+    }
+
+    const agreementContextUserID = localStorage.getItem(
+      'agreementContextUserID',
+    );
+
+    if (!agreementContextUserID) {
+      alert('User ID not found. Please ensure you are logged in.');
+      return;
+    }
+
+    try {
+      setGeneratingInvite(true);
+      const payload = await generateInvitePayload(
+        nodeApiService,
+        currentContextId,
+        agreementContextUserID,
+        inviteId.trim(),
+      );
+      setGeneratedPayload(payload);
+      setShowPayloadDialog(true);
+      setShowInviteModal(false);
+      setInviteId(''); // Clear the input
+    } catch (error) {
+      console.error('Failed to generate invite:', error);
+      alert('Failed to generate invite. Please try again.');
+    } finally {
+      setGeneratingInvite(false);
+    }
+  }, [currentContextId, inviteId, nodeApiService]);
 
   const handleCopyPayload = useCallback(() => {
     navigator.clipboard.writeText(generatedPayload);
@@ -232,10 +447,10 @@ const AgreementPage: React.FC = () => {
                   </Button>
                   <div>
                     <h1 className="text-lg font-semibold text-foreground">
-                      {currentAgreement.name}
+                      {contextDetails?.context_name || 'Loading...'}
                     </h1>
                     <p className="text-sm text-muted-foreground">
-                      {currentAgreement.participants} participants
+                      {contextDetails?.participant_count || 0} participants
                     </p>
                   </div>
                 </div>
@@ -278,28 +493,32 @@ const AgreementPage: React.FC = () => {
               </Button>
             </div>
             <div className="space-y-3">
-              <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
-                  <span className="text-white text-sm font-medium">JD</span>
+              {contextDetails?.participants?.map((participant, index) => (
+                <div
+                  key={participant.user_id}
+                  className="flex items-center space-x-3"
+                >
+                  <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
+                    <span className="text-white text-sm font-medium">
+                      {participant.user_id.slice(0, 2).toUpperCase()}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">
+                      {participant.user_id.slice(0, 8)}...
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {participant.permission_level}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-foreground">
-                    John Doe
-                  </p>
-                  <p className="text-xs text-muted-foreground">Owner</p>
+              )) || (
+                <div className="text-sm text-muted-foreground">
+                  {contextLoading
+                    ? 'Loading participants...'
+                    : 'No participants found'}
                 </div>
-              </div>
-              <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
-                  <span className="text-white text-sm font-medium">JS</span>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-foreground">
-                    Jane Smith
-                  </p>
-                  <p className="text-xs text-muted-foreground">Signer</p>
-                </div>
-              </div>
+              )}
             </div>
           </motion.section>
         )}
@@ -329,7 +548,23 @@ const AgreementPage: React.FC = () => {
             </span>
           </div>
 
-          {filteredDocuments.length === 0 ? (
+          {loading && (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+              <p className="text-muted-foreground mt-2">Loading documents...</p>
+            </div>
+          )}
+
+          {error && !loading && (
+            <div className="text-center py-8">
+              <p className="text-red-500 mb-4">{error}</p>
+              <Button onClick={loadDocuments} variant="outline">
+                Try Again
+              </Button>
+            </div>
+          )}
+
+          {!loading && !error && filteredDocuments.length === 0 && (
             <Card className="border-border/50">
               <CardContent className="p-8 text-center">
                 <FileText className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
@@ -339,7 +574,9 @@ const AgreementPage: React.FC = () => {
                 </p>
               </CardContent>
             </Card>
-          ) : (
+          )}
+
+          {!loading && !error && filteredDocuments.length > 0 && (
             <div className="space-y-4">
               {filteredDocuments.map((document) => (
                 <motion.div
@@ -363,23 +600,58 @@ const AgreementPage: React.FC = () => {
                               <span>{document.size}</span>
                               <span>•</span>
                               <span>{document.uploadedAt}</span>
+                              {document.uploadedBy && (
+                                <>
+                                  <span>•</span>
+                                  <span>
+                                    by {document.uploadedBy.slice(0, 8)}...
+                                  </span>
+                                </>
+                              )}
                             </div>
                           </div>
                         </div>
                       </div>
 
                       <div className="flex items-center justify-between">
-                        <div className="text-sm text-muted-foreground">
-                          Ready for signing
+                        <div className="flex items-center space-x-2">
+                          <div
+                            className={`text-sm px-2 py-1 rounded-full ${
+                              document.status === 'FullySigned'
+                                ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-300'
+                                : document.status === 'PartiallySigned'
+                                  ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300'
+                                  : 'bg-gray-100 text-gray-700 dark:bg-gray-900/20 dark:text-gray-300'
+                            }`}
+                          >
+                            {document.status === 'FullySigned'
+                              ? 'Fully Signed'
+                              : document.status === 'PartiallySigned'
+                                ? 'Partially Signed'
+                                : 'Pending'}
+                          </div>
                         </div>
                         <div className="flex items-center space-x-2">
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => handleOpenDocument(document)}
+                            disabled={loadingPDFPreview}
                             className="p-2 h-auto w-auto"
                           >
-                            <Eye className="w-4 h-4" />
+                            {loadingPDFPreview ? (
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
+                            ) : (
+                              <Eye className="w-4 h-4" />
+                            )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDownloadDocument(document)}
+                            className="p-2 h-auto w-auto text-blue-600 hover:text-blue-700"
+                          >
+                            <Download className="w-4 h-4" />
                           </Button>
                           <Button
                             variant="ghost"
@@ -433,6 +705,7 @@ const AgreementPage: React.FC = () => {
                 variant="ghost"
                 size="sm"
                 onClick={() => setShowInviteModal(false)}
+                disabled={generatingInvite}
                 className="p-1 h-auto w-auto"
               >
                 <X className="w-5 h-5" />
@@ -449,19 +722,31 @@ const AgreementPage: React.FC = () => {
                   placeholder="Enter the ID of invitee"
                   value={inviteId}
                   onChange={(e) => setInviteId(e.target.value)}
-                  className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent mb-3"
+                  disabled={generatingInvite}
+                  className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent mb-3 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
                 <div className="text-center text-sm text-muted-foreground mb-3">
                   OR
                 </div>
-                <select className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent mb-3">
+                <select
+                  disabled={generatingInvite}
+                  className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent mb-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                   <option>Enter From Contacts</option>
                 </select>
                 <Button
                   onClick={handleGenerateInvite}
+                  disabled={generatingInvite || !inviteId.trim()}
                   className="w-full text-white dark:text-black text-lg"
                 >
-                  Generate Invite
+                  {generatingInvite ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                      Generating...
+                    </>
+                  ) : (
+                    'Generate Invite'
+                  )}
                 </Button>
               </div>
 
@@ -504,8 +789,8 @@ const AgreementPage: React.FC = () => {
                 <p className="text-sm text-muted-foreground mb-2">
                   Your invite payload:
                 </p>
-                <div className="bg-background border border-border rounded-lg p-3 break-all text-sm font-mono">
-                  {generatedPayload}
+                <div className="bg-background border border-border rounded-lg p-3 break-all text-sm font-mono min-h-[100px] flex items-center">
+                  {generatedPayload || 'Loading...'}
                 </div>
               </div>
 
@@ -549,39 +834,58 @@ const AgreementPage: React.FC = () => {
                 size="sm"
                 onClick={() => setShowUploadModal(false)}
                 className="p-1 h-auto w-auto"
+                disabled={uploading}
               >
                 <X className="w-5 h-5" />
               </Button>
             </div>
 
             <div className="space-y-4">
-              <div className="text-center">
-                <Upload className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-                <h4 className="text-lg font-semibold text-foreground mb-2 ">
-                  Upload PDF Document
-                </h4>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Select a PDF file to upload for document signing
-                </p>
-                <Button
-                  onClick={handleUploadClick}
-                  className="w-full mb-3 text-white dark:text-black"
-                >
-                  <Upload className="w-4 h-4 mr-2 text-white dark:text-black" />
-                  Choose PDF File
-                </Button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".pdf"
-                  multiple
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Supports: PDF files only
-                </p>
-              </div>
+              {uploading && (
+                <div className="text-center py-4">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+                  <p className="text-sm text-muted-foreground">
+                    Uploading documents...
+                  </p>
+                </div>
+              )}
+
+              {error && (
+                <div className="p-3 bg-red-100 border border-red-300 rounded-lg">
+                  <p className="text-sm text-red-700">{error}</p>
+                </div>
+              )}
+
+              {!uploading && (
+                <div className="text-center">
+                  <Upload className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+                  <h4 className="text-lg font-semibold text-foreground mb-2 ">
+                    Upload PDF Document
+                  </h4>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Select a PDF file to upload for document signing
+                  </p>
+                  <Button
+                    onClick={handleUploadClick}
+                    className="w-full mb-3 text-white dark:text-black"
+                    disabled={uploading}
+                  >
+                    <Upload className="w-4 h-4 mr-2 text-white dark:text-black" />
+                    Choose PDF File
+                  </Button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf"
+                    multiple
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Supports: PDF files only
+                  </p>
+                </div>
+              )}
             </div>
           </motion.div>
         </div>
@@ -597,13 +901,23 @@ const AgreementPage: React.FC = () => {
             className="w-full max-w-4xl h-[90vh] max-h-[90vh]"
           >
             <PDFViewer
-              file={selectedDocument.file}
+              file={selectedDocument.file || null}
               onClose={handleClosePDFViewer}
               title={selectedDocument.name}
               showDownload={true}
               showClose={true}
               maxHeight="90vh"
               className="w-full h-full"
+              contextId={currentContextId || undefined}
+              documentId={selectedDocument.id}
+              documentHash={selectedDocument.hash}
+              showSaveToContext={true}
+              onDocumentSaved={() => {
+                setShowPDFViewer(false);
+                setSelectedDocument(null);
+
+                loadDocuments();
+              }}
             />
           </motion.div>
         </div>
