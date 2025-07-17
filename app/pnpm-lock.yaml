@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@calimero-network/calimero-client':
-        specifier: 1.5.0
-        version: 1.5.0(@near-wallet-selector/modal-ui@8.9.15(near-api-js@3.0.4))
+        specifier: 1.8.0
+        version: 1.8.0(@near-wallet-selector/modal-ui@8.9.15(near-api-js@3.0.4))
       '@radix-ui/react-slot':
         specifier: ^1.2.3
         version: 1.2.3(@types/react@18.3.18)(react@18.3.1)
@@ -26,6 +26,9 @@ importers:
       '@types/signature_pad':
         specifier: ^4.0.0
         version: 4.0.0
+      axios:
+        specifier: ^1.10.0
+        version: 1.10.0
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -797,8 +800,8 @@ packages:
     resolution: {integrity: sha512-vN5p+1kl59GVKMvTHt55NzzmYVxprfJD+ql7U9NFIfKCBkYE55LYtS+WtPlaYOyzydrKI8Nezd+aZextrd+FMA==}
     engines: {node: '>=6.9.0'}
 
-  '@calimero-network/calimero-client@1.5.0':
-    resolution: {integrity: sha512-UQ/3to3mdgNh/VcSTOW4dFpFiXp5jorV078Nt0ya8ByPs+f8RS3fs9awFBEYAqpMbnBY60tp3F4Yp1/3RMsW9g==}
+  '@calimero-network/calimero-client@1.8.0':
+    resolution: {integrity: sha512-OlFK4ws+ZAdt2xgscEc8o+Pxkaxo2NhPkrxQYK2GoNV0PD2qOT3zQmrlZ+a41bARd5y/adzzdQJfv9uh92+AMQ==}
     peerDependencies:
       '@near-wallet-selector/modal-ui': ^8.9.7
 
@@ -1683,8 +1686,8 @@ packages:
     resolution: {integrity: sha512-RE3mdQ7P3FRSe7eqCWoeQ/Z9QXrtniSjp1wUjt5nRC3WIpz5rSCve6o3fsZ2aCpJtrZjSZgjwXAoTO5k4tEI0w==}
     engines: {node: '>=4'}
 
-  axios@1.8.2:
-    resolution: {integrity: sha512-ls4GYBm5aig9vWx8AWDSGLpnpDQRtWAfrjU+EuytuODrFBkqesN2RkOQCBzrA1RQNHw1SmRMSDDDSwzNAYQ6Rg==}
+  axios@1.10.0:
+    resolution: {integrity: sha512-/1xYAC4MP/HEG+3duIhFr4ZQXR4sQXOIe+o6sdqzeykGLx6Upp/1p8MHqhINOvGeP7xyNHe7tsiJByc4SSVUxw==}
 
   axobject-query@4.1.0:
     resolution: {integrity: sha512-qIj0G9wZbMGNLjLmg1PT6v2mE9AH2zlnADJD/2tC6E00hgmhUOfEB6greHPAfLRSufHqROIUTkw6E+M3lH0PTQ==}
@@ -4611,10 +4614,10 @@ snapshots:
       '@babel/helper-string-parser': 7.25.9
       '@babel/helper-validator-identifier': 7.25.9
 
-  '@calimero-network/calimero-client@1.5.0(@near-wallet-selector/modal-ui@8.9.15(near-api-js@3.0.4))':
+  '@calimero-network/calimero-client@1.8.0(@near-wallet-selector/modal-ui@8.9.15(near-api-js@3.0.4))':
     dependencies:
       '@near-wallet-selector/modal-ui': 8.9.15(near-api-js@3.0.4)
-      axios: 1.8.2
+      axios: 1.10.0
       jwt-decode: 4.0.0
       near-api-js: 3.0.4
       react: 18.3.1
@@ -5508,7 +5511,7 @@ snapshots:
 
   axe-core@4.10.2: {}
 
-  axios@1.8.2:
+  axios@1.10.0:
     dependencies:
       follow-redirects: 1.15.9
       form-data: 4.0.2
