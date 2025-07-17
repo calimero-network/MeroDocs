@@ -4,7 +4,7 @@ import { ProtectedRoutesWrapper } from '@calimero-network/calimero-client';
 import { ThemeProvider } from './contexts/ThemeContext';
 
 import Dashboard from './pages/dashboard';
-import ContextPage from './pages/context';
+
 import AgreementPage from './pages/agreement';
 import SignaturesPage from './pages/signatures';
 
@@ -15,7 +15,6 @@ export default function App() {
         <ProtectedRoutesWrapper permissions={['admin']}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
-            <Route path="/context" element={<ContextPage />} />
             <Route path="/agreement" element={<AgreementPage />} />
             <Route path="/signatures" element={<SignaturesPage />} />
             <Route path="*" element={<Dashboard />} />
