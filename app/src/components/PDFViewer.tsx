@@ -400,8 +400,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
     setSavingToContext(true);
     try {
-
-
       const signedPDFBlob = await pdfService.generateSignedPDF(
         file,
         documentSignatures,
@@ -432,8 +430,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
         setError(`Failed to save document: ${response.error.message}`);
         return;
       }
-
-
 
       if (onDocumentSaved) {
         onDocumentSaved();
@@ -1088,17 +1084,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
                         </div>
                       </Button>
                     )}
-
-                  {/* Debug info for development - remove in production */}
-                  {process.env.NODE_ENV === 'development' && (
-                    <div className="text-xs text-muted-foreground p-2 bg-muted rounded">
-                      Debug: showSaveToContext=
-                      {showSaveToContext ? 'true' : 'false'}, signatures=
-                      {documentSignatures.length}, contextId=
-                      {contextId ? 'present' : 'missing'}, documentId=
-                      {documentId ? 'present' : 'missing'}
-                    </div>
-                  )}
 
                   {/* Download Original */}
                   {showDownload && (
