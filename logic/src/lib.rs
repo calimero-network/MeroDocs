@@ -15,6 +15,24 @@ fn encode_blob_id_base58(blob_id_bytes: &[u8; 32]) -> String {
     std::str::from_utf8(&buf[..len]).unwrap().to_owned()
 }
 
+/// Parse blob ID from base58 string
+fn parse_blob_id_base58(blob_id_str: &str) -> Result<[u8; 32], String> {
+    match bs58::decode(blob_id_str).into_vec() {
+        Ok(bytes) => {
+            if bytes.len() != 32 {
+                return Err(format!(
+                    "Invalid blob ID length: expected 32 bytes, got {}",
+                    bytes.len()
+                ));
+            }
+            let mut blob_id = [0u8; 32];
+            blob_id.copy_from_slice(&bytes);
+            Ok(blob_id)
+        }
+        Err(e) => Err(format!("Failed to decode blob ID '{}': {}", blob_id_str, e)),
+    }
+}
+
 /// Safe serialization function for blob ID bytes that handles BufferTooSmall panics
 fn serialize_blob_id_bytes<S>(blob_id_bytes: &[u8; 32], serializer: S) -> Result<S::Ok, S::Error>
 where
@@ -500,7 +518,7 @@ impl MeroDocsState {
                     .permissions
                     .get(&user_id_str)
                     .map_err(|e| format!("Failed to get permission for user: {:?}", e))?
-                    .unwrap_or(PermissionLevel::Read); // Default to Read if permission not found
+                    .unwrap_or(PermissionLevel::Read);
 
                 participants_with_permissions.push(ParticipantInfo {
                     user_id: participant.clone(),
@@ -522,7 +540,7 @@ impl MeroDocsState {
             participant_count: participants_with_permissions.len() as u64,
             participants: participants_with_permissions,
             document_count,
-            created_at: env::time_now(), // You might want to store this separately if needed
+            created_at: env::time_now(),
         };
 
         Ok(context_details)
@@ -548,7 +566,8 @@ impl MeroDocsState {
         context_id: String,
         name: String,
         hash: String,
-        pdf_data: Vec<u8>,
+        pdf_blob_id_str: String,
+        file_size: u64,
     ) -> Result<String, String> {
         let document_id = format!("doc_{}_{}", env::time_now(), name);
 
@@ -556,8 +575,8 @@ impl MeroDocsState {
             return Err("Document with this ID already exists".to_string());
         }
 
-        let pdf_blob_id = store_blob_chunked(&pdf_data)?;
-        let file_size = pdf_data.len() as u64;
+        // Parse the blob ID from the HTTP upload
+        let pdf_blob_id_bytes = parse_blob_id_base58(&pdf_blob_id_str)?;
 
         let document = DocumentInfo {
             id: document_id.clone(),
@@ -566,7 +585,7 @@ impl MeroDocsState {
             uploaded_by: self.owner,
             uploaded_at: env::time_now(),
             status: DocumentStatus::Pending,
-            pdf_blob_id,
+            pdf_blob_id: pdf_blob_id_bytes,
             size: file_size,
         };
 
@@ -611,44 +630,50 @@ impl MeroDocsState {
         }
     }
 
-    /// Sign a document and update the PDF with signatures
+    /// Sign a document by uploading a new signed PDF blob and recording the signer
     pub fn sign_document(
         &mut self,
         context_id: String,
         document_id: String,
-        updated_pdf_data: Vec<u8>,
+        pdf_blob_id_str: String,
+        file_size: u64,
         new_hash: String,
+        signer_id: UserId,
     ) -> Result<(), String> {
+        // Fetch the document
         let mut document = match self.documents.get(&document_id) {
             Ok(Some(doc)) => doc,
             Ok(None) => return Err("Document not found".to_string()),
             Err(e) => return Err(format!("Failed to get document: {:?}", e)),
         };
 
+        // Check if this user has already signed
         if let Ok(Some(signatures)) = self.document_signatures.get(&document_id) {
             if let Ok(iter) = signatures.iter() {
                 for sig in iter {
-                    if sig.signer == self.owner {
+                    if sig.signer == signer_id {
                         return Err("User has already signed this document".to_string());
                     }
                 }
             }
         }
 
-        let updated_pdf_blob_id = store_blob_chunked(&updated_pdf_data)?;
-        let updated_size = updated_pdf_data.len() as u64;
+        // Parse the new signed PDF blob ID
+        let pdf_blob_id_bytes = parse_blob_id_base58(&pdf_blob_id_str)?;
 
-        document.pdf_blob_id = updated_pdf_blob_id;
-        document.size = updated_size;
+        // Update document info with new signed PDF
+        document.pdf_blob_id = pdf_blob_id_bytes;
+        document.size = file_size;
         document.hash = new_hash;
-        document.status = DocumentStatus::PartiallySigned; // Update status
+        document.status = DocumentStatus::PartiallySigned;
 
         self.documents
             .insert(document_id.clone(), document)
             .map_err(|e| format!("Failed to update document: {:?}", e))?;
 
+        // Record the signature
         let signature = DocumentSignature {
-            signer: self.owner,
+            signer: signer_id,
             signed_at: env::time_now(),
         };
 
@@ -668,7 +693,7 @@ impl MeroDocsState {
 
         app::emit!(MeroDocsEvent::DocumentSigned {
             document_id,
-            signer: self.owner,
+            signer: signer_id,
         });
 
         Ok(())
