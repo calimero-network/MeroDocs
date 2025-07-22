@@ -131,7 +131,8 @@ export interface ClientApi {
     contextId: string,
     name: string,
     hash: string,
-    pdfData: Uint8Array,
+    pdfBlobIdStr: string,
+    fileSize: number,
     agreementContextID?: string,
     agreementContextUserID?: string,
   ): ApiResponse<string>;
@@ -144,7 +145,11 @@ export interface ClientApi {
   signDocument(
     contextId: string,
     documentId: string,
-    updatedPdfData: Uint8Array,
+    pdfBlobIdStr: string,
+    fileSize: number,
     newHash: string,
+    signerId: string,
+    agreementContextID?: string,
+    agreementContextUserID?: string,
   ): ApiResponse<void>;
 }

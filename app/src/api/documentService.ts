@@ -1,5 +1,7 @@
 import { ClientApiDataSource } from './dataSource/ClientApiDataSource';
 import { DocumentInfo, Document } from './clientApi';
+import { blobClient } from '@calimero-network/calimero-client';
+import { get } from 'http';
 
 export class DocumentService {
   private clientApi: ClientApiDataSource;
@@ -14,17 +16,46 @@ export class DocumentService {
     file: File,
     agreementContextID?: string,
     agreementContextUserID?: string,
+    onProgress?: (progress: number) => void,
   ): Promise<{ data?: string; error?: any }> {
     try {
+      const blobResponse = await blobClient.uploadBlob(
+        file,
+        onProgress,
+        '',
+        contextId,
+      );
+      console.log(`Blob upload response:`, blobResponse);
+
+      if (blobResponse.error) {
+        console.error(
+          `Upload failed for ${file.name}:`,
+          blobResponse.error.message,
+        );
+        return { error: blobResponse.error };
+      }
+
+      if (!blobResponse.data?.blobId) {
+        console.error(`Failed to get blob ID from upload for ${file.name}`);
+        return { error: { message: 'Failed to get blob ID from upload' } };
+      }
+
+      console.log(
+        `Upload completed for ${file.name}: ${blobResponse.data.blobId}`,
+      );
+
+      // Calculate hash from file for verification
       const arrayBuffer = await file.arrayBuffer();
       const pdfData = new Uint8Array(arrayBuffer);
       const hash = await this.calculateFileHash(pdfData);
 
+      // Register the document with the backend using the blob ID
       const response = await this.clientApi.uploadDocument(
         contextId,
         name,
         hash,
-        pdfData,
+        blobResponse.data.blobId,
+        file.size,
         agreementContextID,
         agreementContextUserID,
       );
@@ -34,8 +65,8 @@ export class DocumentService {
         error: response.error,
       };
     } catch (error) {
-      console.error('Error uploading document:', error);
-      return { error: { message: 'Failed to upload document' } };
+      console.error(`Upload error for ${file.name}:`, error);
+      return { error: { message: `Upload error: ${error}` } };
     }
   }
 
@@ -96,18 +127,49 @@ export class DocumentService {
     contextId: string,
     documentId: string,
     updatedPdfFile: File,
+    signerId: string,
+    agreementContextID?: string,
+    agreementContextUserID?: string,
+    onProgress?: (progress: number) => void,
   ): Promise<{ data?: void; error?: any }> {
     try {
+      // Upload the new signed PDF via blob API
+      const blobResponse = await blobClient.uploadBlob(
+        updatedPdfFile,
+        onProgress,
+        '',
+        contextId,
+      );
+      console.log(`Blob upload response:`, blobResponse);
+
+      if (blobResponse.error) {
+        console.error(
+          `Upload failed for signed PDF:`,
+          blobResponse.error.message,
+        );
+        return { error: blobResponse.error };
+      }
+
+      if (!blobResponse.data?.blobId) {
+        console.error(`Failed to get blob ID from upload for signed PDF`);
+        return { error: { message: 'Failed to get blob ID from upload' } };
+      }
+
+      // Calculate hash from file for verification
       const arrayBuffer = await updatedPdfFile.arrayBuffer();
       const updatedPdfData = new Uint8Array(arrayBuffer);
-
       const newHash = await this.calculateFileHash(updatedPdfData);
 
+      // Call the backend signDocument API with updated PDF data and hash
       const response = await this.clientApi.signDocument(
         contextId,
         documentId,
-        updatedPdfData,
+        blobResponse.data.blobId,
+        updatedPdfFile.size,
         newHash,
+        signerId,
+        agreementContextID,
+        agreementContextUserID,
       );
       return {
         data: response.data === null ? undefined : response.data,

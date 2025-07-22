@@ -82,8 +82,10 @@ export class ClientApiDataSource implements ClientApi {
   async signDocument(
     contextId: string,
     documentId: string,
-    updatedPdfData: Uint8Array,
+    pdfBlobIdStr: string,
+    fileSize: number,
     newHash: string,
+    signerId: string,
     agreementContextID?: string,
     agreementContextUserID?: string,
   ): ApiResponse<void> {
@@ -99,7 +101,7 @@ export class ClientApiDataSource implements ClientApi {
       if (
         !authConfig ||
         !authConfig.contextId ||
-        !authConfig.executorPublicKey
+        !signerId
       ) {
         return {
           data: null,
@@ -113,26 +115,32 @@ export class ClientApiDataSource implements ClientApi {
       const params: RpcQueryParams<{
         context_id: string;
         document_id: string;
-        updated_pdf_data: number[];
+        pdf_blob_id_str: string;
+        file_size: number;
         new_hash: string;
+        signer_id: string;
       }> = {
         contextId: contextId,
         method: ClientMethod.SIGN_DOCUMENT,
         argsJson: {
           context_id: contextId,
           document_id: documentId,
-          updated_pdf_data: Array.from(updatedPdfData),
+          pdf_blob_id_str: pdfBlobIdStr,
+          file_size: fileSize,
           new_hash: newHash,
+          signer_id: signerId,
         },
-        executorPublicKey: authConfig.executorPublicKey,
+        executorPublicKey: signerId,
       };
 
       const response = await rpcClient.execute<
         {
           context_id: string;
           document_id: string;
-          updated_pdf_data: number[];
+          pdf_blob_id_str: string;
+          file_size: number;
           new_hash: string;
+          signer_id: string;
         },
         void
       >(params, RequestConfig);
@@ -348,7 +356,8 @@ export class ClientApiDataSource implements ClientApi {
     contextId: string,
     name: string,
     hash: string,
-    pdfData: Uint8Array,
+    pdfBlobIdStr: string,
+    fileSize: number,
     agreementContextID?: string,
     agreementContextUserID?: string,
   ): Promise<any> {
@@ -368,7 +377,8 @@ export class ClientApiDataSource implements ClientApi {
           context_id: contextId,
           name,
           hash,
-          pdf_data: Array.from(pdfData),
+          pdf_blob_id_str: pdfBlobIdStr,
+          file_size: fileSize,
         },
       } as RpcQueryParams<any>);
 

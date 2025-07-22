@@ -1,6 +1,7 @@
 import axios from 'axios';
 import {
   getAppEndpointKey,
+  getApplicationId,
   type ApiResponse,
 } from '@calimero-network/calimero-client';
 import type {
@@ -33,7 +34,7 @@ export class ContextApiDataSource implements NodeApi {
       const nodeEndpoint = getAppEndpointKey() || DEFAULT_NODE_ENDPOINT;
 
       const response = await axios.post(`${nodeEndpoint}/admin-api/contexts`, {
-        applicationId: import.meta.env.VITE_APPLICATION_ID || '',
+        applicationId: getApplicationId() || '',
         protocol: 'near',
         initializationParams: byteArray,
       });
