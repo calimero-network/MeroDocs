@@ -64,6 +64,15 @@ interface UploadedDocument {
   pdfBlobId?: string;
 }
 
+interface FileUpload {
+  file: File;
+  progress: number;
+  uploading: boolean;
+  uploaded: boolean;
+  error?: string;
+  blob_id?: string;
+}
+
 const generateInvitePayload = async (
   nodeApiService: ContextApiDataSource,
   contextId: string,
@@ -111,6 +120,7 @@ const AgreementPage: React.FC = () => {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [generatingInvite, setGeneratingInvite] = useState(false);
   const [documents, setDocuments] = useState<UploadedDocument[]>([]);
+  const [uploadFiles, setUploadFiles] = useState<FileUpload[]>([]);
   const [selectedDocument, setSelectedDocument] =
     useState<UploadedDocument | null>(null);
   const [showPDFViewer, setShowPDFViewer] = useState(false);
@@ -146,8 +156,6 @@ const AgreementPage: React.FC = () => {
         'agreementContextUserID',
       );
 
-
-
       const response = await clientApiService.getContextDetails(
         currentContextId,
         agreementContextID || undefined,
@@ -158,7 +166,6 @@ const AgreementPage: React.FC = () => {
         setError(response.error.message);
         setContextDetails(null);
       } else {
-
         setContextDetails(response.data);
       }
     } catch (err) {
@@ -181,8 +188,6 @@ const AgreementPage: React.FC = () => {
       const agreementContextUserID = localStorage.getItem(
         'agreementContextUserID',
       );
-
-
 
       const response = await documentService.listDocuments(
         currentContextId,
@@ -256,55 +261,70 @@ const AgreementPage: React.FC = () => {
         'agreementContextUserID',
       );
 
-
-
-      let uploadedCount = 0;
-      const uploadPromises = Array.from(files).map(async (file) => {
-        if (file.type === 'application/pdf') {
-          try {
-            const response = await documentService.uploadDocument(
-              currentContextId,
-              file.name,
-              file,
-              agreementContextID || undefined,
-              agreementContextUserID || undefined,
-            );
-
-            if (response.error) {
-              console.error(`Failed to upload ${file.name}:`, response.error);
-              alert(
-                `Failed to upload "${file.name}": ${response.error.message}`,
-              );
-            } else {
-              uploadedCount++;
-            }
-          } catch (error) {
-            console.error(`Error uploading ${file.name}:`, error);
-            alert(`Error uploading "${file.name}"`);
-          }
-        } else {
-          alert(
-            `"${file.name}" is not a PDF file. Please upload only PDF files.`,
-          );
-        }
-      });
-
-      await Promise.all(uploadPromises);
-
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
+   
+      const file = files[0];
+      if (!file) {
+        setUploading(false);
+        setError('No file selected');
+        return;
       }
 
-      setShowUploadModal(false);
-      setUploading(false);
+      if (file.type !== 'application/pdf') {
+        setUploading(false);
+        setError(
+          `"${file.name}" is not a PDF file. Please upload only PDF files.`,
+        );
+        return;
+      }
 
-      if (uploadedCount > 0) {
-        const message =
-          uploadedCount === 1
-            ? '1 document uploaded successfully!'
-            : `${uploadedCount} documents uploaded successfully!`;
-        alert(message);
+      setUploadFiles([
+        {
+          file,
+          progress: 0,
+          uploading: true,
+          uploaded: false,
+          error: undefined,
+          blob_id: undefined,
+        },
+      ]);
 
+      const response = await documentService.uploadDocument(
+        currentContextId,
+        file.name,
+        file,
+        agreementContextID || undefined,
+        agreementContextUserID || undefined,
+        (progress: number) => {
+          setUploadFiles((prev) => prev.map((f) => ({ ...f, progress })));
+        },
+      );
+
+      if (response.error) {
+        setUploadFiles((prev) =>
+          prev.map((f) => ({
+            ...f,
+            uploading: false,
+            error: response.error.message,
+          })),
+        );
+        setUploading(false);
+        setError(response.error.message);
+        console.error(`Failed to upload ${file.name}:`, response.error);
+      } else {
+        setUploadFiles((prev) =>
+          prev.map((f) => ({
+            ...f,
+            uploading: false,
+            uploaded: true,
+            progress: 100,
+          })),
+        );
+        setUploading(false);
+        setError(null);
+        setShowUploadModal(false);
+        setUploadFiles([]);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        alert('Document uploaded successfully!');
         await loadDocuments();
       }
     },
@@ -328,8 +348,7 @@ const AgreementPage: React.FC = () => {
     try {
       setLoadingPDFPreview(true);
 
-
-      const blob = await blobClient.downloadBlob(document.pdfBlobId);
+      const blob = await blobClient.downloadBlob(document.pdfBlobId, currentContextId || undefined);
 
       const file = new File([blob], document.name, { type: 'application/pdf' });
 
@@ -338,8 +357,6 @@ const AgreementPage: React.FC = () => {
         file: file,
       });
       setShowPDFViewer(true);
-
-
     } catch (error) {
       console.error(`Failed to load PDF for preview: ${document.name}`, error);
       alert(
@@ -362,10 +379,7 @@ const AgreementPage: React.FC = () => {
     }
 
     try {
-
-
-      const blob = await blobClient.downloadBlob(doc.pdfBlobId);
-
+      const blob = await blobClient.downloadBlob(doc.pdfBlobId, currentContextId || undefined);
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -374,8 +388,6 @@ const AgreementPage: React.FC = () => {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-
-
     } catch (error) {
       console.error(`Failed to download document: ${doc.name}`, error);
       alert(`Failed to download "${doc.name}". Please try again.`);
@@ -841,11 +853,54 @@ const AgreementPage: React.FC = () => {
             </div>
 
             <div className="space-y-4">
-              {uploading && (
+              {uploading && uploadFiles.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium text-foreground mb-2">
+                    Upload Progress
+                  </h4>
+                  {uploadFiles.map((fileUpload, index) => (
+                    <div key={index} className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-foreground truncate flex-1 mr-2">
+                          {fileUpload.file.name}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {fileUpload.uploaded
+                            ? 'Complete'
+                            : fileUpload.error
+                              ? 'Error'
+                              : `${Math.round(fileUpload.progress)}%`}
+                        </span>
+                      </div>
+                      <div className="w-full bg-muted rounded-full h-2">
+                        <div
+                          className={`h-2 rounded-full transition-all duration-300 ${
+                            fileUpload.error
+                              ? 'bg-red-500'
+                              : fileUpload.uploaded
+                                ? 'bg-green-500'
+                                : 'bg-primary'
+                          }`}
+                          style={{
+                            width: `${fileUpload.uploaded ? 100 : fileUpload.progress}%`,
+                          }}
+                        />
+                      </div>
+                      {fileUpload.error && (
+                        <p className="text-xs text-red-500 mt-1">
+                          {fileUpload.error}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {uploading && uploadFiles.length === 0 && (
                 <div className="text-center py-4">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
                   <p className="text-sm text-muted-foreground">
-                    Uploading documents...
+                    Preparing upload...
                   </p>
                 </div>
               )}
@@ -877,7 +932,6 @@ const AgreementPage: React.FC = () => {
                     ref={fileInputRef}
                     type="file"
                     accept=".pdf"
-                    multiple
                     onChange={handleFileUpload}
                     className="hidden"
                   />

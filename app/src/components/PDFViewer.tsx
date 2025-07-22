@@ -28,6 +28,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import './PDFViewer.css';
 import { useTheme } from '../contexts/ThemeContext';
 import { ClientApiDataSource } from '../api/dataSource/ClientApiDataSource';
+import { DocumentService } from '../api/documentService';
 
 interface SavedSignature {
   id: string;
@@ -107,6 +108,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
   const [savingToContext, setSavingToContext] = useState(false);
 
   const clientApiService = new ClientApiDataSource();
+  const documentService = new DocumentService();
 
   const loadPDF = useCallback(async () => {
     if (!file) return;
@@ -408,21 +410,26 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
       const arrayBuffer = await signedPDFBlob.arrayBuffer();
       const updatedPdfData = new Uint8Array(arrayBuffer);
-
       const newHash = await calculateFileHash(updatedPdfData);
 
-      const agreementContextID = localStorage.getItem('agreementContextID');
-      const agreementContextUserID = localStorage.getItem(
-        'agreementContextUserID',
-      );
+      // Convert signedPDFBlob to File
+      const signedFile = new File([signedPDFBlob], file?.name || 'signed.pdf', {
+        type: 'application/pdf',
+      });
+      const signerId = localStorage.getItem('agreementContextUserID') || '';
+      const agreementContextID =
+        localStorage.getItem('agreementContextID') || undefined;
+      const agreementContextUserID =
+        localStorage.getItem('agreementContextUserID') || undefined;
 
-      const response = await clientApiService.signDocument(
+      // Use DocumentService for signing
+      const response = await documentService.signDocument(
         contextId,
         documentId,
-        updatedPdfData,
-        newHash,
-        agreementContextID || undefined,
-        agreementContextUserID || undefined,
+        signedFile,
+        signerId,
+        agreementContextID,
+        agreementContextUserID
       );
 
       if (response.error) {
