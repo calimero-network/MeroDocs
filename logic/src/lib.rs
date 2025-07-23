@@ -144,6 +144,7 @@ pub enum ParticipantRole {
     Owner,
     Signer,
     Viewer,
+    Unknown,
 }
 
 /// Document information
@@ -429,6 +430,7 @@ impl MeroDocsState {
         &mut self,
         context_id: String,
         shared_identity: UserId,
+        context_name: String,
     ) -> Result<(), String> {
         if !self.is_private {
             return Err("Context joining can only be managed in private context".to_string());
@@ -440,28 +442,10 @@ impl MeroDocsState {
 
         let private_identity = self.owner;
 
-        let context_name = match self.get_context_details(context_id.clone()) {
-            Ok(details) => details.context_name,
-            Err(_) => format!("Context-{}", context_id),
-        };
-
-        // Fetch permission level for this user
-        let permission_level =
-            match self.get_user_permission(context_id.clone(), shared_identity.clone()) {
-                Ok(perm) => perm,
-                Err(_) => PermissionLevel::Sign,
-            };
-
-        let role = match permission_level {
-            PermissionLevel::Admin => ParticipantRole::Owner,
-            PermissionLevel::Sign => ParticipantRole::Signer,
-            PermissionLevel::Read => ParticipantRole::Viewer,
-        };
-
         let metadata = ContextMetadata {
             context_id: context_id.clone(),
             context_name: context_name.clone(),
-            role,
+            role: ParticipantRole::Unknown, // Role will be managed by add participant not here hence Unknown
             joined_at: env::time_now(),
             private_identity,
             shared_identity,
@@ -513,21 +497,7 @@ impl MeroDocsState {
 
         let mut contexts = Vec::new();
         if let Ok(entries) = self.joined_contexts.entries() {
-            for (_, mut metadata) in entries {
-                if let Ok(details) = self.get_context_details(metadata.context_id.clone()) {
-                    metadata.context_name = details.context_name;
-                }
-
-                if let Ok(perm) = self.get_user_permission(
-                    metadata.context_id.clone(),
-                    metadata.shared_identity.clone(),
-                ) {
-                    metadata.role = match perm {
-                        PermissionLevel::Admin => ParticipantRole::Owner,
-                        PermissionLevel::Sign => ParticipantRole::Signer,
-                        PermissionLevel::Read => ParticipantRole::Viewer,
-                    };
-                }
+            for (_, metadata) in entries {
                 contexts.push(metadata.clone());
             }
         }

@@ -6,12 +6,9 @@ import {
 } from '@calimero-network/calimero-client';
 import {
   FileText,
-  Users,
   Search,
   Plus,
-  MoreVertical,
   ArrowRight,
-  Clock,
   Layers,
   X,
   UserPlus,
@@ -145,6 +142,10 @@ export default function Dashboard() {
       setError('Please enter a valid invitation payload');
       return;
     }
+    if (!contextName.trim()) {
+      setError('Please enter the context name you are joining');
+      return;
+    }
 
     const payload = invitationPayload.trim();
 
@@ -177,6 +178,7 @@ export default function Dashboard() {
       const joinSharedResponse = await clientApiService.joinSharedContext(
         contextId,
         memberPublicKey,
+        contextName.trim(),
       );
 
       if (joinSharedResponse.error) {
@@ -337,10 +339,6 @@ export default function Dashboard() {
                 Create your first agreement to get started with document
                 management.
               </p>
-              <Button onClick={() => setShowCreateModal(true)}>
-                <Plus className="w-4 h-4 mr-2" />
-                Create First Agreement
-              </Button>
             </div>
           )}
 
@@ -364,25 +362,14 @@ export default function Dashboard() {
                             {context.name}
                           </h3>
                           <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed line-clamp-2">
-                            Role: {context.role} • Context ID:{' '}
-                            {context.contextId.slice(0, 8)}...
+                            Context ID: {context.contextId}
                           </p>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="p-1 h-5 w-5 sm:h-6 sm:w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                          }}
-                        >
-                          <MoreVertical className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-                        </Button>
                       </div>
 
                       {/* Content */}
                       <div className="space-y-2.5 sm:space-y-3">
-                        {/* Stats */}
+                        {/* Stats
                         <div className="flex items-center space-x-3 sm:space-x-4 text-xs sm:text-sm text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <Users className="w-3 h-3 sm:w-4 sm:h-4" />
@@ -396,7 +383,7 @@ export default function Dashboard() {
                             <Clock className="w-3 h-3 sm:w-4 sm:h-4" />
                             Active
                           </span>
-                        </div>
+                        </div> */}
 
                         {/* Footer */}
                         <div className="flex items-center justify-between pt-2 border-t border-border/50">
@@ -533,6 +520,26 @@ export default function Dashboard() {
                   Enter the invitation payload shared by the agreement owner
                 </p>
               </div>
+              <div>
+                <label
+                  htmlFor="contextName"
+                  className="block text-sm font-medium text-foreground mb-2"
+                >
+                  Context Name
+                </label>
+                <input
+                  id="contextName"
+                  type="text"
+                  value={contextName}
+                  onChange={(e) => setContextName(e.target.value)}
+                  placeholder="Enter the name of the context you are joining"
+                  className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  disabled={joining}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  This will be used as the name for the joined context
+                </p>
+              </div>
               {error && (
                 <div className="p-3 bg-red-100 border border-red-300 rounded-lg">
                   <p className="text-sm text-red-700">{error}</p>
@@ -543,6 +550,7 @@ export default function Dashboard() {
                   onClick={() => {
                     setShowJoinModal(false);
                     setInvitationPayload('');
+                    setContextName('');
                     setError(null);
                     setJoinProgress('');
                   }}
@@ -555,7 +563,9 @@ export default function Dashboard() {
                 <Button
                   onClick={handleJoinAgreement}
                   className="flex-1 dark:text-black"
-                  disabled={!invitationPayload.trim() || joining}
+                  disabled={
+                    !invitationPayload.trim() || !contextName.trim() || joining
+                  }
                 >
                   {joining ? (
                     <>

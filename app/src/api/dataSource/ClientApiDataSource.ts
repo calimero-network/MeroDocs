@@ -341,15 +341,18 @@ export class ClientApiDataSource implements ClientApi {
   async joinSharedContext(
     contextId: string,
     sharedIdentity: UserId,
+    name: string,
   ): Promise<any> {
     try {
+      const argsJson: any = {
+        context_id: contextId,
+        shared_identity: sharedIdentity,
+        context_name: name,
+      };
       const response = await rpcClient.execute({
         ...getAuthConfig(),
         method: ClientMethod.JOIN_SHARED_CONTEXT,
-        argsJson: {
-          context_id: contextId,
-          shared_identity: sharedIdentity,
-        },
+        argsJson,
       } as RpcQueryParams<any>);
       return {
         data: response.result,

@@ -117,6 +117,7 @@ export interface ClientApi {
   joinSharedContext(
     contextId: string,
     sharedIdentity: UserId,
+    name: string,
   ): ApiResponse<void>;
   listJoinedContexts(): ApiResponse<ContextMetadata[]>;
   leaveSharedContext(contextId: string): ApiResponse<void>;

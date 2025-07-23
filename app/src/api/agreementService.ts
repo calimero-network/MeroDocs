@@ -39,6 +39,7 @@ export class AgreementService {
       const joinResponse = await this.clientApi.joinSharedContext(
         contextData.contextId,
         contextData.memberPublicKey, 
+        name,
       );
 
       if (joinResponse.error) {
