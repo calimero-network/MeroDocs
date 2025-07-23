@@ -55,16 +55,13 @@ export default function Dashboard() {
       setLoading(true);
       setError(null);
 
-
       const response = await agreementService.listAgreements();
-
 
       if (response.error) {
         console.error('Dashboard: Error from listAgreements:', response.error);
         setError(response.error.message);
         setAgreements([]);
       } else {
-
         setAgreements(response.data || []);
       }
     } catch (err) {
@@ -76,16 +73,11 @@ export default function Dashboard() {
     }
   }, [agreementService]);
 
-  // Load agreements on every dashboard mount
   useEffect(() => {
-
-
-    // Only try to load if we have the basic requirements
     if (url && applicationId) {
-
       loadAgreements();
     }
-  }, [url, applicationId, loadAgreements]); // Load on mount and when these change
+  }, [url, applicationId, loadAgreements]);
 
   const stats = [
     {
@@ -129,7 +121,6 @@ export default function Dashboard() {
 
       const response = await agreementService.createAgreement(
         agreementName.trim(),
-        `Agreement workspace: ${agreementName.trim()}`,
       );
 
       if (response.error) {
@@ -155,13 +146,7 @@ export default function Dashboard() {
       return;
     }
 
-    if (!contextName.trim()) {
-      setError('Please enter the agreement name');
-      return;
-    }
-
     const payload = invitationPayload.trim();
-    const name = contextName.trim();
 
     if (payload.length < 10) {
       setError('Invitation payload appears to be invalid (too short)');
@@ -173,8 +158,6 @@ export default function Dashboard() {
       setError(null);
       setJoinProgress('Joining context...');
 
-
-
       const joinResponse = await nodeApiService.joinContext({
         invitationPayload: payload,
       });
@@ -185,20 +168,14 @@ export default function Dashboard() {
         return;
       }
 
-
-
       setJoinProgress('Storing context information...');
       const { contextId, memberPublicKey } = joinResponse.data;
       localStorage.setItem('agreementContextID', contextId);
       localStorage.setItem('agreementContextUserID', memberPublicKey);
 
-
       setJoinProgress('Joining shared context...');
-
       const joinSharedResponse = await clientApiService.joinSharedContext(
         contextId,
-        name,
-        selectedRole,
         memberPublicKey,
       );
 
@@ -210,8 +187,6 @@ export default function Dashboard() {
         return;
       }
 
-
-
       setJoinProgress('Finalizing...');
       setShowJoinModal(false);
       setInvitationPayload('');
@@ -221,7 +196,7 @@ export default function Dashboard() {
       await loadAgreements();
 
       alert(
-        `Successfully joined the agreement "${name}" as ${selectedRole}! You can now access the shared documents.`,
+        `Successfully joined the agreement as ${selectedRole}! You can now access the shared documents.`,
       );
     } catch (err) {
       console.error('Failed to join agreement:', err);
@@ -237,7 +212,6 @@ export default function Dashboard() {
   const handleAgreementClick = (agreement: Agreement) => {
     localStorage.setItem('agreementContextID', agreement.contextId);
     localStorage.setItem('agreementContextUserID', agreement.sharedIdentity);
-
 
     navigate('/agreement');
   };
@@ -535,99 +509,10 @@ export default function Dashboard() {
               mode === 'dark' ? 'bg-gray-900' : 'bg-white'
             }`}
           >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-foreground">
+            <div className="flex flex-col gap-4">
+              <h3 className="text-lg font-semibold text-foreground mb-2">
                 Join Agreement
               </h3>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setShowJoinModal(false);
-                  setInvitationPayload('');
-                  setContextName('');
-                  setSelectedRole('Signer'); // Reset to default
-                  setError(null);
-                  setJoinProgress('');
-                }}
-                disabled={joining}
-                className="p-1 h-auto w-auto"
-              >
-                <X className="w-5 h-5" />
-              </Button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label
-                  htmlFor="contextName"
-                  className="block text-sm font-medium text-foreground mb-2"
-                >
-                  Agreement Name
-                </label>
-                <input
-                  id="contextName"
-                  type="text"
-                  value={contextName}
-                  onChange={(e) => setContextName(e.target.value)}
-                  placeholder="Enter the agreement name..."
-                  className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                  disabled={joining}
-                  autoFocus
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Enter the name of the agreement you're joining
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Your Role
-                </label>
-                <div className="space-y-2">
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      value="Signer"
-                      checked={selectedRole === 'Signer'}
-                      onChange={(e) =>
-                        setSelectedRole(e.target.value as 'Signer' | 'Viewer')
-                      }
-                      className="mr-3 text-primary"
-                      disabled={joining}
-                    />
-                    <div>
-                      <span className="font-medium text-foreground">
-                        Signer
-                      </span>
-                      <p className="text-xs text-muted-foreground">
-                        Can view and sign documents
-                      </p>
-                    </div>
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      value="Viewer"
-                      checked={selectedRole === 'Viewer'}
-                      onChange={(e) =>
-                        setSelectedRole(e.target.value as 'Signer' | 'Viewer')
-                      }
-                      className="mr-3 text-primary"
-                      disabled={joining}
-                    />
-                    <div>
-                      <span className="font-medium text-foreground">
-                        Viewer
-                      </span>
-                      <p className="text-xs text-muted-foreground">
-                        Can only view documents
-                      </p>
-                    </div>
-                  </label>
-                </div>
-              </div>
-
               <div>
                 <label
                   htmlFor="invitationPayload"
@@ -648,20 +533,16 @@ export default function Dashboard() {
                   Enter the invitation payload shared by the agreement owner
                 </p>
               </div>
-
               {error && (
                 <div className="p-3 bg-red-100 border border-red-300 rounded-lg">
                   <p className="text-sm text-red-700">{error}</p>
                 </div>
               )}
-
               <div className="flex gap-3 pt-4">
                 <Button
                   onClick={() => {
                     setShowJoinModal(false);
                     setInvitationPayload('');
-                    setContextName('');
-                    setSelectedRole('Signer'); // Reset to default
                     setError(null);
                     setJoinProgress('');
                   }}
@@ -674,9 +555,7 @@ export default function Dashboard() {
                 <Button
                   onClick={handleJoinAgreement}
                   className="flex-1 dark:text-black"
-                  disabled={
-                    !invitationPayload.trim() || !contextName.trim() || joining
-                  }
+                  disabled={!invitationPayload.trim() || joining}
                 >
                   {joining ? (
                     <>
