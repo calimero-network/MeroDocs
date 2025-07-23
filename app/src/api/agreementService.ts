@@ -13,15 +13,14 @@ export class AgreementService {
     this.clientApi = new ClientApiDataSource();
   }
 
-  // Create a new agreement (shared context)
+
   async createAgreement(
     name: string,
-    description?: string,
   ): ApiResponse<Agreement> {
     try {
-      // Step 1: Create the context through NodeApi
+  
       const contextProps: CreateContextProps = {
-        is_private: false, // Agreement contexts are shared
+        is_private: false, // Shared context
         context_name: name,
       };
 
@@ -36,28 +35,26 @@ export class AgreementService {
 
       const contextData = contextResponse.data as CreateContextResponse;
 
-      // Step 2: Join the context through ClientApi to establish identity mapping
+      
       const joinResponse = await this.clientApi.joinSharedContext(
         contextData.contextId,
-        name,
-        'Owner', // Creator gets Owner role
-        contextData.memberPublicKey, // Use the member public key as shared identity
+        contextData.memberPublicKey, 
       );
 
       if (joinResponse.error) {
         console.error('Failed to join created context:', joinResponse.error);
-        // Still return the agreement even if join fails for now
+       
       }
 
-      // Step 3: Create the agreement object
+      
       const agreement: Agreement = {
         id: contextData.contextId,
         name,
         contextId: contextData.contextId,
         memberPublicKey: contextData.memberPublicKey,
-        role: 'Owner', // Creator gets Owner role
+        role: 'Owner', 
         joinedAt: Date.now(),
-        privateIdentity: contextData.memberPublicKey, // TODO: Get actual private identity
+        privateIdentity: contextData.memberPublicKey, 
         sharedIdentity: contextData.memberPublicKey,
       };
 
@@ -154,26 +151,26 @@ export class AgreementService {
   }
 
   // Leave an agreement (shared context)
-  async leaveAgreement(agreementId: string): ApiResponse<void> {
-    try {
-      return await this.clientApi.leaveSharedContext(agreementId);
-    } catch (error) {
-      console.error('leaveAgreement failed:', error);
-      let errorMessage = 'An unexpected error occurred during leaveAgreement';
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      } else if (typeof error === 'string') {
-        errorMessage = error;
-      }
-      return {
-        data: null,
-        error: {
-          code: 500,
-          message: errorMessage,
-        },
-      };
-    }
-  }
+  // async leaveAgreement(agreementId: string): ApiResponse<void> {
+  //   try {
+  //     return await this.clientApi.leaveSharedContext(agreementId);
+  //   } catch (error) {
+  //     console.error('leaveAgreement failed:', error);
+  //     let errorMessage = 'An unexpected error occurred during leaveAgreement';
+  //     if (error instanceof Error) {
+  //       errorMessage = error.message;
+  //     } else if (typeof error === 'string') {
+  //       errorMessage = error;
+  //     }
+  //     return {
+  //       data: null,
+  //       error: {
+  //         code: 500,
+  //         message: errorMessage,
+  //       },
+  //     };
+  //   }
+  // }
 
   // Invite someone to an agreement
   async inviteToAgreement(
@@ -220,7 +217,7 @@ export class AgreementService {
         };
       }
 
-      // Extract the contextId from the response
+     
       const contextId = joinResponse.data?.contextId || '';
 
       return {

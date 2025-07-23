@@ -4,8 +4,15 @@ import {
   rpcClient,
   getAuthConfig,
   getAppEndpointKey,
+  WsSubscriptionsClient,
 } from '@calimero-network/calimero-client';
-import { ClientApi, ClientMethod, ContextDetails, UserId } from '../clientApi';
+import {
+  ClientApi,
+  ClientMethod,
+  ContextDetails,
+  PermissionLevel,
+  UserId,
+} from '../clientApi';
 
 const RequestConfig = { timeout: 30000 };
 
@@ -30,6 +37,56 @@ function getContextSpecificAuthConfig(
 }
 
 export class ClientApiDataSource implements ClientApi {
+  async addParticipant(
+    contextId: string,
+    userId: UserId,
+    permission: PermissionLevel,
+    agreementContextID?: string,
+    agreementContextUserID?: string,
+  ): ApiResponse<void> {
+    try {
+      const authConfig =
+        agreementContextID && agreementContextUserID
+          ? getContextSpecificAuthConfig(
+              agreementContextID,
+              agreementContextUserID,
+            )
+          : getAuthConfig();
+      const response = await rpcClient.execute({
+        ...authConfig,
+        method: ClientMethod.ADD_PARTICIPANT,
+        argsJson: {
+          context_id: contextId,
+          user_id: userId,
+          permission: permission,
+        },
+      } as RpcQueryParams<any>);
+
+      if (response?.error) {
+        return {
+          data: undefined,
+          error: {
+            code: response.error.code ?? 500,
+            message: getErrorMessage(response.error),
+          },
+        };
+      }
+
+      return {
+        data: undefined,
+        error: null,
+      };
+    } catch (error: any) {
+      console.error('ClientApiDataSource: Error in addParticipant:', error);
+      return {
+        data: null,
+        error: {
+          code: error.code || 500,
+          message: getErrorMessage(error),
+        },
+      };
+    }
+  }
   async getContextDetails(
     contextId: string,
     agreementContextID?: string,
@@ -54,7 +111,7 @@ export class ClientApiDataSource implements ClientApi {
 
       if (response?.error) {
         return {
-          data: null,
+          data: undefined,
           error: {
             code: response.error.code ?? 500,
             message: getErrorMessage(response.error),
@@ -98,11 +155,7 @@ export class ClientApiDataSource implements ClientApi {
             )
           : getAuthConfig();
 
-      if (
-        !authConfig ||
-        !authConfig.contextId ||
-        !signerId
-      ) {
+      if (!authConfig || !authConfig.contextId || !signerId) {
         return {
           data: null,
           error: {
@@ -287,8 +340,6 @@ export class ClientApiDataSource implements ClientApi {
 
   async joinSharedContext(
     contextId: string,
-    contextName: string,
-    role: string,
     sharedIdentity: UserId,
   ): Promise<any> {
     try {
@@ -297,8 +348,6 @@ export class ClientApiDataSource implements ClientApi {
         method: ClientMethod.JOIN_SHARED_CONTEXT,
         argsJson: {
           context_id: contextId,
-          context_name: contextName,
-          role,
           shared_identity: sharedIdentity,
         },
       } as RpcQueryParams<any>);
@@ -498,4 +547,69 @@ export class ClientApiDataSource implements ClientApi {
       };
     }
   }
+
+  async markParticipantSigned(
+    contextId: string,
+    documentId: string,
+    userId: string,
+    agreementContextID?: string,
+    agreementContextUserID?: string,
+  ): ApiResponse<void> {
+    try {
+      const authConfig =
+        agreementContextID && agreementContextUserID
+          ? getContextSpecificAuthConfig(
+              agreementContextID,
+              agreementContextUserID,
+            )
+          : getAuthConfig();
+
+      const response = await rpcClient.execute({
+        ...authConfig,
+        method: ClientMethod.MARK_PARTICIPANT_SIGNED,
+        argsJson: {
+          context_id: contextId,
+          document_id: documentId,
+          user_id: userId,
+        },
+      } as RpcQueryParams<any>);
+
+      if (response?.error) {
+        return {
+          data: undefined,
+          error: {
+            code: response.error.code ?? 500,
+            message: getErrorMessage(response.error),
+          },
+        };
+      }
+
+      return {
+        data: undefined,
+        error: null,
+      };
+    } catch (error: any) {
+      console.error(
+        'ClientApiDataSource: Error in markParticipantSigned:',
+        error,
+      );
+      return {
+        data: null,
+        error: {
+          code: error.code || 500,
+          message: getErrorMessage(error),
+        },
+      };
+    }
+  }
+}
+
+export function getWsSubscriptionsClient() {
+  const appEndpointKey = getAppEndpointKey();
+  if (!appEndpointKey) {
+    throw new Error(
+      'Application endpoint key is missing. Please check your configuration.',
+    );
+  }
+  return new WsSubscriptionsClient(appEndpointKey, '/ws');
 }

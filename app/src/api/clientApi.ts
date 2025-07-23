@@ -15,9 +15,10 @@ export enum ClientMethod {
   GET_DOCUMENT = 'get_document',
   SIGN_DOCUMENT = 'sign_document',
   GET_DOCUMENT_SIGNATURES = 'get_document_signatures',
-  GET_DOCUMENT_PDF = 'get_document_pdf',
   MARK_DOCUMENT_FULLY_SIGNED = 'mark_document_fully_signed',
   GET_CONTEXT_DETAILS = 'get_context_details',
+  ADD_PARTICIPANT = 'add_participant',
+  MARK_PARTICIPANT_SIGNED = 'mark_participant_signed'
 }
 
 export interface SignatureRecord {
@@ -115,8 +116,6 @@ export interface ClientApi {
 
   joinSharedContext(
     contextId: string,
-    contextName: string,
-    role: string,
     sharedIdentity: UserId,
   ): ApiResponse<void>;
   listJoinedContexts(): ApiResponse<ContextMetadata[]>;
@@ -149,6 +148,13 @@ export interface ClientApi {
     fileSize: number,
     newHash: string,
     signerId: string,
+    agreementContextID?: string,
+    agreementContextUserID?: string,
+  ): ApiResponse<void>;
+  addParticipant(
+    contextId: string,
+    userId: UserId,
+    permission: PermissionLevel,
     agreementContextID?: string,
     agreementContextUserID?: string,
   ): ApiResponse<void>;

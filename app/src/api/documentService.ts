@@ -171,6 +171,17 @@ export class DocumentService {
         agreementContextID,
         agreementContextUserID,
       );
+
+      if (!response.error) {
+        await this.clientApi.markParticipantSigned(
+          contextId,
+          documentId,
+          signerId,
+          agreementContextID,
+          agreementContextUserID,
+        );
+      }
+
       return {
         data: response.data === null ? undefined : response.data,
         error: response.error,
@@ -182,11 +193,25 @@ export class DocumentService {
   }
 
   private formatDocument(documentInfo: DocumentInfo): Document {
+    const uploadedAtMs = Math.floor(
+      Number(documentInfo.uploaded_at) / 1_000_000,
+    );
+
+    const dateObj = new Date(uploadedAtMs);
+    const uploadedAtStr = dateObj.toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+
     return {
       id: documentInfo.id,
       name: documentInfo.name,
       size: this.formatFileSize(documentInfo.size),
-      uploadedAt: new Date(documentInfo.uploaded_at).toLocaleDateString(),
+      uploadedAt: uploadedAtStr,
       status: documentInfo.status,
       uploadedBy: documentInfo.uploaded_by,
       hash: documentInfo.hash,
