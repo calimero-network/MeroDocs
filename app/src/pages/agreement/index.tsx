@@ -10,6 +10,7 @@ import {
   getAppEndpointKey,
   getApplicationId,
   blobClient,
+  SubscriptionsClient,
 } from '@calimero-network/calimero-client';
 import {
   ArrowLeft,
@@ -29,9 +30,12 @@ import { MobileLayout } from '../../components/MobileLayout';
 import PDFViewer from '../../components/PDFViewer';
 import { useTheme } from '../../contexts/ThemeContext';
 import { DocumentService } from '../../api/documentService';
-import { ClientApiDataSource } from '../../api/dataSource/ClientApiDataSource';
+import {
+  ClientApiDataSource,
+  getWsSubscriptionsClient,
+} from '../../api/dataSource/ClientApiDataSource';
 import { ContextApiDataSource } from '../../api/dataSource/nodeApiDataSource';
-import { ContextDetails } from '../../api/clientApi';
+import { ContextDetails, PermissionLevel } from '../../api/clientApi';
 
 // Constants
 
@@ -115,6 +119,9 @@ const AgreementPage: React.FC = () => {
   const [showParticipants, setShowParticipants] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteId, setInviteId] = useState('');
+  const [invitePermission, setInvitePermission] = useState<PermissionLevel>(
+    PermissionLevel.Sign,
+  );
   const [generatedPayload, setGeneratedPayload] = useState('');
   const [showPayloadDialog, setShowPayloadDialog] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -200,16 +207,18 @@ const AgreementPage: React.FC = () => {
         setDocuments([]);
       } else {
         const uploadedDocs: UploadedDocument[] = (response.data || []).map(
-          (doc) => ({
-            id: doc.id,
-            name: doc.name,
-            size: doc.size,
-            uploadedAt: doc.uploadedAt,
-            status: doc.status,
-            uploadedBy: doc.uploadedBy,
-            hash: doc.hash,
-            pdfBlobId: doc.pdfBlobId,
-          }),
+          (doc) => {
+            return {
+              id: doc.id,
+              name: doc.name,
+              size: doc.size,
+              uploadedAt: doc.uploadedAt,
+              status: doc.status,
+              uploadedBy: doc.uploadedBy,
+              hash: doc.hash,
+              pdfBlobId: doc.pdfBlobId,
+            };
+          },
         );
         setDocuments(uploadedDocs);
       }
@@ -261,7 +270,6 @@ const AgreementPage: React.FC = () => {
         'agreementContextUserID',
       );
 
-   
       const file = files[0];
       if (!file) {
         setUploading(false);
@@ -348,7 +356,10 @@ const AgreementPage: React.FC = () => {
     try {
       setLoadingPDFPreview(true);
 
-      const blob = await blobClient.downloadBlob(document.pdfBlobId, currentContextId || undefined);
+      const blob = await blobClient.downloadBlob(
+        document.pdfBlobId,
+        currentContextId || undefined,
+      );
 
       const file = new File([blob], document.name, { type: 'application/pdf' });
 
@@ -379,7 +390,10 @@ const AgreementPage: React.FC = () => {
     }
 
     try {
-      const blob = await blobClient.downloadBlob(doc.pdfBlobId, currentContextId || undefined);
+      const blob = await blobClient.downloadBlob(
+        doc.pdfBlobId,
+        currentContextId || undefined,
+      );
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -404,6 +418,8 @@ const AgreementPage: React.FC = () => {
       'agreementContextUserID',
     );
 
+    const agreementContextID = localStorage.getItem('agreementContextID');
+
     if (!agreementContextUserID) {
       alert('User ID not found. Please ensure you are logged in.');
       return;
@@ -420,20 +436,107 @@ const AgreementPage: React.FC = () => {
       setGeneratedPayload(payload);
       setShowPayloadDialog(true);
       setShowInviteModal(false);
-      setInviteId(''); // Clear the input
+      // Call addParticipant after payload is generated
+      const addResp = await clientApiService.addParticipant(
+        currentContextId,
+        inviteId.trim(),
+        invitePermission,
+        agreementContextID || undefined,
+        agreementContextUserID || undefined,
+      );
+      if (addResp.error) {
+        alert('Failed to add participant: ' + addResp.error.message);
+      }
+      setInviteId('');
+      setInvitePermission(PermissionLevel.Sign);
     } catch (error) {
       console.error('Failed to generate invite:', error);
       alert('Failed to generate invite. Please try again.');
     } finally {
       setGeneratingInvite(false);
     }
-  }, [currentContextId, inviteId, nodeApiService]);
+  }, [
+    currentContextId,
+    inviteId,
+    invitePermission,
+    nodeApiService,
+    clientApiService,
+    setInvitePermission,
+  ]);
 
   const handleCopyPayload = useCallback(() => {
     navigator.clipboard.writeText(generatedPayload);
     alert('Payload copied to clipboard!');
     setShowPayloadDialog(false);
   }, [generatedPayload]);
+
+  useEffect(() => {
+    let subscriptionsClient: SubscriptionsClient | null = null;
+
+    const observeDocumentEvents = async () => {
+      try {
+        subscriptionsClient = getWsSubscriptionsClient();
+        await subscriptionsClient.connect();
+        subscriptionsClient.subscribe([currentContextId || '']);
+
+        subscriptionsClient?.addCallback(async (data: any) => {
+          try {
+            if (data.type === 'StateMutation') {
+              await loadDocuments();
+            }
+          } catch (err) {
+            console.error('Error handling document event:', err);
+          }
+        });
+      } catch (err) {
+        console.error('Failed to subscribe to document events:', err);
+      }
+    };
+
+    if (currentContextId) {
+      observeDocumentEvents();
+    }
+
+    return () => {
+      if (subscriptionsClient) {
+        subscriptionsClient.disconnect();
+      }
+    };
+  }, [currentContextId, loadDocuments]);
+
+  useEffect(() => {
+    let subscriptionsClient: SubscriptionsClient | null = null;
+
+    const observeParticipantEvents = async () => {
+      try {
+        subscriptionsClient = getWsSubscriptionsClient();
+        await subscriptionsClient.connect();
+        subscriptionsClient.subscribe([currentContextId || '']);
+
+        subscriptionsClient?.addCallback(async (data: any) => {
+          try {
+            if (data.type === 'StateMutation') {
+              await loadContextDetails();
+            }
+          } catch (err) {
+            console.error('Error handling participant event:', err);
+          }
+        });
+      } catch (err) {
+        console.error('Failed to subscribe to participant events:', err);
+      }
+    };
+
+    if (currentContextId) {
+      observeParticipantEvents();
+    }
+
+    return () => {
+      if (subscriptionsClient) {
+        subscriptionsClient.disconnect();
+      }
+    };
+  }, [currentContextId, loadContextDetails]);
 
   return (
     <MobileLayout>
@@ -737,19 +840,54 @@ const AgreementPage: React.FC = () => {
                   disabled={generatingInvite}
                   className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent mb-3 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
-                <div className="text-center text-sm text-muted-foreground mb-3">
-                  OR
+
+                {/* Permission Level Selection (Radio Buttons) */}
+                <label className="block text-sm font-medium text-foreground mb-2 mt-2">
+                  Permission Level
+                </label>
+                <div className="space-y-2">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      value={PermissionLevel.Sign}
+                      checked={invitePermission === PermissionLevel.Sign}
+                      onChange={() => setInvitePermission(PermissionLevel.Sign)}
+                      className="mr-3 text-primary"
+                      disabled={generatingInvite}
+                    />
+                    <div>
+                      <span className="font-medium text-foreground">
+                        Signer
+                      </span>
+                      <p className="text-xs text-muted-foreground">
+                        Can view and sign documents
+                      </p>
+                    </div>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      value={PermissionLevel.Read}
+                      checked={invitePermission === PermissionLevel.Read}
+                      onChange={() => setInvitePermission(PermissionLevel.Read)}
+                      className="mr-3 text-primary"
+                      disabled={generatingInvite}
+                    />
+                    <div>
+                      <span className="font-medium text-foreground">
+                        Viewer
+                      </span>
+                      <p className="text-xs text-muted-foreground">
+                        Can only view documents
+                      </p>
+                    </div>
+                  </label>
                 </div>
-                <select
-                  disabled={generatingInvite}
-                  className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent mb-3 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <option>Enter From Contacts</option>
-                </select>
+
                 <Button
                   onClick={handleGenerateInvite}
                   disabled={generatingInvite || !inviteId.trim()}
-                  className="w-full text-white dark:text-black text-lg"
+                  className="w-full text-white dark:text-black text-lg mt-4"
                 >
                   {generatingInvite ? (
                     <>
@@ -761,11 +899,6 @@ const AgreementPage: React.FC = () => {
                   )}
                 </Button>
               </div>
-
-              <Button variant="outline" className="w-full">
-                <Plus className="w-4 h-4 mr-2" />
-                Add A Member
-              </Button>
             </div>
           </motion.div>
         </div>
