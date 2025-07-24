@@ -17,12 +17,23 @@ import {
 const RequestConfig = { timeout: 30000 };
 
 function getErrorMessage(error: any): string {
+  if (
+    error?.type === 'Uninitialized' ||
+    error?.message?.includes('Uninitialized')
+  ) {
+    return 'Syncing state, Please wait and retry.';
+  }
+  if (
+    error?.error?.name === 'UnknownServerError' &&
+    error?.error?.cause?.info?.message?.includes("Verify that the node server is running")
+  ) {
+    return 'Syncing state, Please wait and retry.';
+  }
   if (typeof error === 'string') return error;
   if (error?.message) return error.message;
   if (error?.data) return JSON.stringify(error.data);
   return 'An unexpected error occurred';
 }
-
 function getContextSpecificAuthConfig(
   agreementContextID: string,
   agreementContextUserID: string,
