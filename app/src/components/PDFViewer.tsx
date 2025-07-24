@@ -107,7 +107,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
   const [showMobileActions, setShowMobileActions] = useState(false);
   const [savingToContext, setSavingToContext] = useState(false);
 
-  const clientApiService = new ClientApiDataSource();
   const documentService = new DocumentService();
 
   const loadPDF = useCallback(async () => {
@@ -429,7 +428,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
         signedFile,
         signerId,
         agreementContextID,
-        agreementContextUserID
+        agreementContextUserID,
       );
 
       if (response.error) {
@@ -443,7 +442,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
       }
 
       setError(null);
-      alert('Document signed and saved successfully!');
     } catch (err) {
       console.error('Error saving document to context:', err);
       setError('Failed to save signed document to context.');
