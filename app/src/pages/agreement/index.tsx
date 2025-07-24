@@ -23,8 +23,10 @@ import {
   X,
   Trash2,
   Download,
+  AlertCircle,
+  CheckCircle2,
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Button, Card, CardContent } from '../../components/ui';
 import { MobileLayout } from '../../components/MobileLayout';
 import PDFViewer from '../../components/PDFViewer';
@@ -77,6 +79,40 @@ interface FileUpload {
   blob_id?: string;
 }
 
+type NotificationType = 'success' | 'error';
+interface NotificationState {
+  message: string;
+  type: NotificationType;
+}
+
+const NotificationPopup: React.FC<{
+  notification: NotificationState;
+  onClose: () => void;
+}> = ({ notification }) => (
+  <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+    <motion.div
+      initial={{ opacity: 0, scale: 0.8 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.9 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+      className={`relative p-8 rounded-2xl shadow-2xl border w-full max-w-sm text-center ${
+        notification.type === 'success'
+          ? 'bg-green-100 border-green-300 text-green-900 dark:bg-gray-800 dark:border-green-600 dark:text-green-200'
+          : 'bg-red-100 border-red-300 text-red-900 dark:bg-gray-800 dark:border-red-600 dark:text-red-200'
+      }`}
+    >
+      <div className="flex flex-col items-center justify-center">
+        {notification.type === 'success' ? (
+          <CheckCircle2 className="w-16 h-16 mb-5 text-green-500" />
+        ) : (
+          <AlertCircle className="w-16 h-16 mb-5 text-red-500" />
+        )}
+        <p className="text-lg font-medium">{notification.message}</p>
+      </div>
+    </motion.div>
+  </div>
+);
+
 const generateInvitePayload = async (
   nodeApiService: ContextApiDataSource,
   contextId: string,
@@ -101,7 +137,6 @@ const generateInvitePayload = async (
     return JSON.stringify(response, null, 2);
   } catch (error) {
     console.error('Failed to generate invite:', error);
-
     return `INVITE_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 };
@@ -139,6 +174,19 @@ const AgreementPage: React.FC = () => {
     null,
   );
   const [contextLoading, setContextLoading] = useState(true);
+  const [notification, setNotification] = useState<NotificationState | null>(
+    null,
+  );
+
+  const showNotification = useCallback(
+    (message: string, type: NotificationType) => {
+      setNotification({ message, type });
+      setTimeout(() => {
+        setNotification(null);
+      }, 1500);
+    },
+    [],
+  );
 
   const currentContextId = useMemo(() => {
     const storedContextId = localStorage.getItem('agreementContextID');
@@ -332,85 +380,131 @@ const AgreementPage: React.FC = () => {
         setShowUploadModal(false);
         setUploadFiles([]);
         if (fileInputRef.current) fileInputRef.current.value = '';
-        alert('Document uploaded successfully!');
+        showNotification('Document uploaded successfully!', 'success');
         await loadDocuments();
       }
     },
-    [documentService, currentContextId, loadDocuments],
+    [documentService, currentContextId, loadDocuments, showNotification],
   );
 
   const handleUploadClick = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
 
-  const handleRemoveDocument = useCallback((documentId: string) => {
-    setDocuments((prev) => prev.filter((doc) => doc.id !== documentId));
-  }, []);
-
-  const handleOpenDocument = useCallback(async (document: UploadedDocument) => {
-    if (!document.pdfBlobId) {
-      alert('Document blob ID not available for preview');
-      return;
-    }
-
-    try {
-      setLoadingPDFPreview(true);
-
-      const blob = await blobClient.downloadBlob(
-        document.pdfBlobId,
-        currentContextId || undefined,
+  const handleRemoveDocument = useCallback(
+    async (documentId: string) => {
+      const agreementContextID = localStorage.getItem('agreementContextID');
+      const agreementContextUserID = localStorage.getItem(
+        'agreementContextUserID',
       );
 
-      const file = new File([blob], document.name, { type: 'application/pdf' });
+      try {
+        setLoading(true);
+        setError(null);
 
-      setSelectedDocument({
-        ...document,
-        file: file,
-      });
-      setShowPDFViewer(true);
-    } catch (error) {
-      console.error(`Failed to load PDF for preview: ${document.name}`, error);
-      alert(
-        `Failed to load PDF for preview: "${document.name}". Please try again.`,
-      );
-    } finally {
-      setLoadingPDFPreview(false);
-    }
-  }, []);
+        const response = await clientApiService.deleteDocument(
+          documentId,
+          agreementContextID || undefined,
+          agreementContextUserID || undefined,
+        );
+
+        if (response.error) {
+          setError(response.error.message || 'Failed to delete document');
+          setLoading(false);
+          return;
+        }
+
+        setDocuments((prev) => prev.filter((doc) => doc.id !== documentId));
+        setLoading(false);
+        showNotification('Document deleted successfully!', 'success');
+      } catch (err) {
+        console.error('Failed to delete document:', err);
+        setError('Failed to delete document');
+        setLoading(false);
+      }
+    },
+    [clientApiService, showNotification],
+  );
+
+  const handleOpenDocument = useCallback(
+    async (document: UploadedDocument) => {
+      if (!document.pdfBlobId) {
+        showNotification(
+          'Document blob ID not available for preview.',
+          'error',
+        );
+        return;
+      }
+
+      try {
+        setLoadingPDFPreview(true);
+
+        const blob = await blobClient.downloadBlob(
+          document.pdfBlobId,
+          currentContextId || undefined,
+        );
+
+        const file = new File([blob], document.name, {
+          type: 'application/pdf',
+        });
+
+        setSelectedDocument({
+          ...document,
+          file: file,
+        });
+        setShowPDFViewer(true);
+      } catch (error) {
+        console.error(
+          `Failed to load PDF for preview: ${document.name}`,
+          error,
+        );
+        showNotification(`Failed to load PDF: "${document.name}".`, 'error');
+      } finally {
+        setLoadingPDFPreview(false);
+      }
+    },
+    [currentContextId, showNotification],
+  );
 
   const handleClosePDFViewer = useCallback(() => {
     setShowPDFViewer(false);
     setSelectedDocument(null);
   }, []);
 
-  const handleDownloadDocument = useCallback(async (doc: UploadedDocument) => {
-    if (!doc.pdfBlobId) {
-      alert('Document blob ID not available for download');
-      return;
-    }
+  const handleDownloadDocument = useCallback(
+    async (doc: UploadedDocument) => {
+      if (!doc.pdfBlobId) {
+        showNotification(
+          'Document blob ID not available for download.',
+          'error',
+        );
+        return;
+      }
 
-    try {
-      const blob = await blobClient.downloadBlob(
-        doc.pdfBlobId,
-        currentContextId || undefined,
-      );
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = doc.name;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error(`Failed to download document: ${doc.name}`, error);
-      alert(`Failed to download "${doc.name}". Please try again.`);
-    }
-  }, []);
+      try {
+        const blob = await blobClient.downloadBlob(
+          doc.pdfBlobId,
+          currentContextId || undefined,
+        );
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = doc.name;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } catch (error) {
+        console.error(`Failed to download document: ${doc.name}`, error);
+        showNotification(`Failed to download "${doc.name}".`, 'error');
+      }
+    },
+    [currentContextId, showNotification],
+  );
 
   const handleGenerateInvite = useCallback(async () => {
     if (!currentContextId || !inviteId.trim()) {
-      alert('Please enter a valid invitee ID');
+      showNotification('Please enter a valid invitee ID.', 'error');
       return;
     }
 
@@ -421,7 +515,10 @@ const AgreementPage: React.FC = () => {
     const agreementContextID = localStorage.getItem('agreementContextID');
 
     if (!agreementContextUserID) {
-      alert('User ID not found. Please ensure you are logged in.');
+      showNotification(
+        'User ID not found. Please ensure you are logged in.',
+        'error',
+      );
       return;
     }
 
@@ -436,7 +533,7 @@ const AgreementPage: React.FC = () => {
       setGeneratedPayload(payload);
       setShowPayloadDialog(true);
       setShowInviteModal(false);
-      // Call addParticipant after payload is generated
+
       const addResp = await clientApiService.addParticipant(
         currentContextId,
         inviteId.trim(),
@@ -445,13 +542,16 @@ const AgreementPage: React.FC = () => {
         agreementContextUserID || undefined,
       );
       if (addResp.error) {
-        alert('Failed to add participant: ' + addResp.error.message);
+        showNotification(
+          'Failed to add participant: ' + addResp.error.message,
+          'error',
+        );
       }
       setInviteId('');
       setInvitePermission(PermissionLevel.Sign);
     } catch (error) {
       console.error('Failed to generate invite:', error);
-      alert('Failed to generate invite. Please try again.');
+      showNotification('Failed to generate invite. Please try again.', 'error');
     } finally {
       setGeneratingInvite(false);
     }
@@ -461,85 +561,59 @@ const AgreementPage: React.FC = () => {
     invitePermission,
     nodeApiService,
     clientApiService,
-    setInvitePermission,
+    showNotification,
   ]);
 
   const handleCopyPayload = useCallback(() => {
     navigator.clipboard.writeText(generatedPayload);
-    alert('Payload copied to clipboard!');
+    showNotification('Payload copied to clipboard!', 'success');
     setShowPayloadDialog(false);
-  }, [generatedPayload]);
+  }, [generatedPayload, showNotification]);
 
   useEffect(() => {
     let subscriptionsClient: SubscriptionsClient | null = null;
 
-    const observeDocumentEvents = async () => {
+    const observeEvents = async () => {
+      if (!currentContextId) return;
+
       try {
         subscriptionsClient = getWsSubscriptionsClient();
         await subscriptionsClient.connect();
-        subscriptionsClient.subscribe([currentContextId || '']);
+        subscriptionsClient.subscribe([currentContextId]);
 
         subscriptionsClient?.addCallback(async (data: any) => {
           try {
             if (data.type === 'StateMutation') {
-              await loadDocuments();
+              await Promise.all([loadDocuments(), loadContextDetails()]);
             }
           } catch (err) {
-            console.error('Error handling document event:', err);
+            console.error('Error handling state mutation event:', err);
           }
         });
       } catch (err) {
-        console.error('Failed to subscribe to document events:', err);
+        console.error('Failed to subscribe to context events:', err);
       }
     };
 
-    if (currentContextId) {
-      observeDocumentEvents();
-    }
+    observeEvents();
 
     return () => {
       if (subscriptionsClient) {
         subscriptionsClient.disconnect();
       }
     };
-  }, [currentContextId, loadDocuments]);
-
-  useEffect(() => {
-    let subscriptionsClient: SubscriptionsClient | null = null;
-
-    const observeParticipantEvents = async () => {
-      try {
-        subscriptionsClient = getWsSubscriptionsClient();
-        await subscriptionsClient.connect();
-        subscriptionsClient.subscribe([currentContextId || '']);
-
-        subscriptionsClient?.addCallback(async (data: any) => {
-          try {
-            if (data.type === 'StateMutation') {
-              await loadContextDetails();
-            }
-          } catch (err) {
-            console.error('Error handling participant event:', err);
-          }
-        });
-      } catch (err) {
-        console.error('Failed to subscribe to participant events:', err);
-      }
-    };
-
-    if (currentContextId) {
-      observeParticipantEvents();
-    }
-
-    return () => {
-      if (subscriptionsClient) {
-        subscriptionsClient.disconnect();
-      }
-    };
-  }, [currentContextId, loadContextDetails]);
+  }, [currentContextId, loadDocuments, loadContextDetails]);
 
   return (
     <MobileLayout>
+      <AnimatePresence>
+        {notification && (
+          <NotificationPopup
+            notification={notification}
+            onClose={() => setNotification(null)}
+          />
+        )}
+      </AnimatePresence>
       <motion.div
         variants={ANIMATION_VARIANTS.container}
         initial="hidden"
@@ -608,7 +682,7 @@ const AgreementPage: React.FC = () => {
               </Button>
             </div>
             <div className="space-y-3">
-              {contextDetails?.participants?.map((participant, index) => (
+              {contextDetails?.participants?.map((participant) => (
                 <div
                   key={participant.user_id}
                   className="flex items-center space-x-3"
