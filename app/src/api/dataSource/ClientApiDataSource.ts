@@ -225,20 +225,20 @@ export class ClientApiDataSource implements ClientApi {
     }
   }
 
-  private dataURLToUint8Array(dataURL: string): Uint8Array {
-    const base64String = dataURL.split(',')[1];
-    const binaryString = atob(base64String);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-    return bytes;
-  }
+  // private dataURLToUint8Array(dataURL: string): Uint8Array {
+  //   const base64String = dataURL.split(',')[1];
+  //   const binaryString = atob(base64String);
+  //   const bytes = new Uint8Array(binaryString.length);
+  //   for (let i = 0; i < binaryString.length; i++) {
+  //     bytes[i] = binaryString.charCodeAt(i);
+  //   }
+  //   return bytes;
+  // }
 
-  private uint8ArrayToDataURL(uint8Array: Uint8Array): string {
-    const base64String = btoa(String.fromCharCode(...uint8Array));
-    return `data:image/png;base64,${base64String}`;
-  }
+  // private uint8ArrayToDataURL(uint8Array: Uint8Array): string {
+  //   const base64String = btoa(String.fromCharCode(...uint8Array));
+  //   return `data:image/png;base64,${base64String}`;
+  // }
 
   async createSignature(name: string, pngData: Uint8Array): Promise<any> {
     try {
@@ -452,6 +452,55 @@ export class ClientApiDataSource implements ClientApi {
       };
     } catch (error: any) {
       console.error('ClientApiDataSource: Error in uploadDocument:', error);
+      return {
+        data: null,
+        error: {
+          code: error.code || 500,
+          message: getErrorMessage(error),
+        },
+      };
+    }
+  }
+
+  async deleteDocument(
+    documentId: string,
+    agreementContextID?: string,
+    agreementContextUserID?: string,
+  ): Promise<any> {
+    try {
+      const authConfig =
+        agreementContextID && agreementContextUserID
+          ? getContextSpecificAuthConfig(
+              agreementContextID,
+              agreementContextUserID,
+            )
+          : getAuthConfig();
+
+      const response = await rpcClient.execute({
+        ...authConfig,
+        method: ClientMethod.DELETE_DOCUMENT,
+        argsJson: {
+          context_id: agreementContextID || '',
+          document_id: documentId,
+        },
+      } as RpcQueryParams<any>);
+
+      if (response?.error) {
+        return {
+          data: null,
+          error: {
+            code: response.error.code ?? 500,
+            message: getErrorMessage(response.error),
+          },
+        };
+      }
+
+      return {
+        data: undefined,
+        error: null,
+      };
+    } catch (error: any) {
+      console.error('ClientApiDataSource: Error in deleteDocument:', error);
       return {
         data: null,
         error: {

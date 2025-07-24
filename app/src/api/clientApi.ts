@@ -11,6 +11,7 @@ export enum ClientMethod {
   LIST_JOINED_CONTEXTS = 'list_joined_contexts',
   LEAVE_SHARED_CONTEXT = 'leave_shared_context',
   UPLOAD_DOCUMENT = 'upload_document',
+  DELETE_DOCUMENT = 'delete_document',
   LIST_DOCUMENTS = 'list_documents',
   GET_DOCUMENT = 'get_document',
   SIGN_DOCUMENT = 'sign_document',
@@ -136,6 +137,12 @@ export interface ClientApi {
     agreementContextID?: string,
     agreementContextUserID?: string,
   ): ApiResponse<string>;
+  deleteDocument(
+    contextId: string,
+    documentId: string,
+    agreementContextID?: string,
+    agreementContextUserID?: string,
+  ): ApiResponse<void>;
   listDocuments(
     contextId: string,
     agreementContextID?: string,
