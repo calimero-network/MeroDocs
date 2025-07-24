@@ -1,7 +1,6 @@
 import { ClientApiDataSource } from './dataSource/ClientApiDataSource';
 import { DocumentInfo, Document } from './clientApi';
 import { blobClient } from '@calimero-network/calimero-client';
-import { get } from 'http';
 
 export class DocumentService {
   private clientApi: ClientApiDataSource;
