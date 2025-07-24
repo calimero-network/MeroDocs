@@ -694,7 +694,8 @@ const AgreementPage: React.FC = () => {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-foreground">
-                      {participant.user_id.slice(0, 8)}...
+                      {participant.user_id.slice(0, 6)}...
+                      {participant.user_id.slice(-4)}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {participant.permission_level}
