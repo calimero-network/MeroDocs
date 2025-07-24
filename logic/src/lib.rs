@@ -290,6 +290,9 @@ pub enum MeroDocsEvent {
         name: String,
         uploaded_by: UserId,
     },
+    DocumentDeleted {
+        id: String,
+    },
     DocumentSigned {
         document_id: String,
         signer: UserId,
@@ -604,6 +607,30 @@ impl MeroDocsState {
         });
 
         Ok(document_id)
+    }
+
+    /// Delete a document by ID
+    pub fn delete_document(
+        &mut self,
+        context_id: String,
+        document_id: String,
+    ) -> Result<(), String> {
+        self.validate_admin_permissions()?;
+
+        match self.documents.remove(&document_id) {
+            Ok(Some(_)) => {
+                let _ = self.document_signatures.remove(&document_id);
+
+               
+                app::emit!(MeroDocsEvent::DocumentDeleted {
+                    id: document_id,
+                });
+
+                Ok(())
+            }
+            Ok(None) => Err(format!("Document not found: {}", document_id)),
+            Err(e) => Err(format!("Failed to delete document: {:?}", e)),
+        }
     }
 
     /// List all documents
