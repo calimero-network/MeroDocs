@@ -12,8 +12,10 @@ import {
   Layers,
   X,
   UserPlus,
+  CheckCircle2,
+  AlertCircle,
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Button, Card, CardContent } from '../../components/ui';
 import { MobileLayout } from '../../components/MobileLayout';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -21,6 +23,40 @@ import { AgreementService } from '../../api/agreementService';
 import { ContextApiDataSource } from '../../api/dataSource/nodeApiDataSource';
 import { ClientApiDataSource } from '../../api/dataSource/ClientApiDataSource';
 import { Agreement } from '../../api/clientApi';
+
+type NotificationType = 'success' | 'error';
+interface NotificationState {
+  message: string;
+  type: NotificationType;
+}
+
+
+const NotificationPopup: React.FC<{
+  notification: NotificationState;
+}> = ({ notification }) => (
+  <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+    <motion.div
+      initial={{ opacity: 0, scale: 0.8 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.9 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+      className={`relative p-8 rounded-2xl shadow-2xl border w-full max-w-sm text-center ${
+        notification.type === 'success'
+          ? 'bg-green-100 border-green-300 text-green-900 dark:bg-gray-800 dark:border-green-600 dark:text-green-200'
+          : 'bg-red-100 border-red-300 text-red-900 dark:bg-gray-800 dark:border-red-600 dark:text-red-200'
+      }`}
+    >
+      <div className="flex flex-col items-center justify-center">
+        {notification.type === 'success' ? (
+          <CheckCircle2 className="w-16 h-16 mb-5 text-green-500" />
+        ) : (
+          <AlertCircle className="w-16 h-16 mb-5 text-red-500" />
+        )}
+        <p className="text-lg font-medium">{notification.message}</p>
+      </div>
+    </motion.div>
+  </div>
+);
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -33,19 +69,29 @@ export default function Dashboard() {
   const [agreementName, setAgreementName] = useState('');
   const [invitationPayload, setInvitationPayload] = useState('');
   const [contextName, setContextName] = useState('');
-  const [selectedRole, setSelectedRole] = useState<'Signer' | 'Viewer'>(
-    'Signer',
-  );
   const [agreements, setAgreements] = useState<Agreement[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState(false);
   const [joinProgress, setJoinProgress] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [notification, setNotification] = useState<NotificationState | null>(
+    null,
+  );
 
   const agreementService = useMemo(() => new AgreementService(), []);
   const nodeApiService = useMemo(() => new ContextApiDataSource(), []);
   const clientApiService = useMemo(() => new ClientApiDataSource(), []);
+
+  const showNotification = useCallback(
+    (message: string, type: NotificationType) => {
+      setNotification({ message, type });
+      setTimeout(() => {
+        setNotification(null);
+      }, 1500);
+    },
+    [],
+  );
 
   const loadAgreements = useCallback(async () => {
     try {
@@ -125,6 +171,7 @@ export default function Dashboard() {
         return;
       }
 
+      showNotification('Agreement created successfully!', 'success');
       setShowCreateModal(false);
       setAgreementName('');
 
@@ -166,6 +213,7 @@ export default function Dashboard() {
       if (joinResponse.error) {
         console.error('Join context error:', joinResponse.error);
         setError(joinResponse.error.message || 'Failed to join context');
+        setJoining(false);
         return;
       }
 
@@ -175,6 +223,7 @@ export default function Dashboard() {
       localStorage.setItem('agreementContextUserID', memberPublicKey);
 
       setJoinProgress('Joining shared context...');
+
       const joinSharedResponse = await clientApiService.joinSharedContext(
         contextId,
         memberPublicKey,
@@ -186,6 +235,7 @@ export default function Dashboard() {
         setError(
           'Failed to join shared context: ' + joinSharedResponse.error.message,
         );
+        setJoining(false);
         return;
       }
 
@@ -193,13 +243,10 @@ export default function Dashboard() {
       setShowJoinModal(false);
       setInvitationPayload('');
       setContextName('');
-      setSelectedRole('Signer');
 
       await loadAgreements();
 
-      alert(
-        `Successfully joined the agreement as ${selectedRole}! You can now access the shared documents.`,
-      );
+      showNotification('Successfully joined agreement!', 'success');
     } catch (err) {
       console.error('Failed to join agreement:', err);
       const errorMessage =
@@ -220,6 +267,9 @@ export default function Dashboard() {
 
   return (
     <MobileLayout>
+      <AnimatePresence>
+        {notification && <NotificationPopup notification={notification} />}
+      </AnimatePresence>
       <motion.div
         variants={containerVariants}
         initial="hidden"
@@ -273,11 +323,11 @@ export default function Dashboard() {
                       >
                         <Icon className={`w-4 h-4 ${stat.color}`} />
                       </div>
-                      <div className="flex-1 min-w-0">
+                      <div className="flex min-w-0 gap-2 justify-between items-center">
                         <div className="text-lg sm:text-xl font-bold text-foreground">
                           {stat.value}
                         </div>
-                        <div className="text-xs text-muted-foreground truncate">
+                        <div className="text-s text-muted-foreground truncate">
                           {stat.label}
                         </div>
                       </div>
@@ -369,22 +419,6 @@ export default function Dashboard() {
 
                       {/* Content */}
                       <div className="space-y-2.5 sm:space-y-3">
-                        {/* Stats
-                        <div className="flex items-center space-x-3 sm:space-x-4 text-xs sm:text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Users className="w-3 h-3 sm:w-4 sm:h-4" />
-                            {context.role}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <FileText className="w-3 h-3 sm:w-4 sm:h-4" />
-                            Context
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3 sm:w-4 sm:h-4" />
-                            Active
-                          </span>
-                        </div> */}
-
                         {/* Footer */}
                         <div className="flex items-center justify-between pt-2 border-t border-border/50">
                           <span className="text-xs text-muted-foreground">
@@ -497,9 +531,26 @@ export default function Dashboard() {
             }`}
           >
             <div className="flex flex-col gap-4">
-              <h3 className="text-lg font-semibold text-foreground mb-2">
-                Join Agreement
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-foreground">
+                  Join Agreement
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setShowJoinModal(false);
+                    setInvitationPayload('');
+                    setContextName('');
+                    setError(null);
+                    setJoinProgress('');
+                  }}
+                  className="p-1 h-auto w-auto"
+                  disabled={joining}
+                >
+                  <X className="w-5 h-5" />
+                </Button>
+              </div>
               <div>
                 <label
                   htmlFor="invitationPayload"
