@@ -412,7 +412,8 @@ export default function Dashboard() {
                             {context.name}
                           </h3>
                           <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed line-clamp-2">
-                            Context ID: {context.contextId}
+                            Context ID: {context.contextId.slice(0, 6)}...
+                            {context.contextId.slice(-4)}
                           </p>
                         </div>
                       </div>
