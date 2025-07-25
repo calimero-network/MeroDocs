@@ -11,6 +11,15 @@ importers:
       '@calimero-network/calimero-client':
         specifier: link:../../Calimero/calimero-client-js
         version: link:../../Calimero/calimero-client-js
+      '@dfinity/agent':
+        specifier: ^3.1.0
+        version: 3.1.0(@dfinity/candid@3.1.0(@dfinity/principal@3.1.0))(@dfinity/principal@3.1.0)(@noble/hashes@1.8.0)
+      '@dfinity/auth-client':
+        specifier: ^3.1.0
+        version: 3.1.0(@dfinity/agent@3.1.0(@dfinity/candid@3.1.0(@dfinity/principal@3.1.0))(@dfinity/principal@3.1.0)(@noble/hashes@1.8.0))(@dfinity/identity@3.1.0(@dfinity/agent@3.1.0(@dfinity/candid@3.1.0(@dfinity/principal@3.1.0))(@dfinity/principal@3.1.0)(@noble/hashes@1.8.0))(@dfinity/candid@3.1.0(@dfinity/principal@3.1.0))(@dfinity/principal@3.1.0)(@noble/curves@1.9.4)(@noble/hashes@1.8.0))(@dfinity/principal@3.1.0)
+      '@dfinity/principal':
+        specifier: ^3.1.0
+        version: 3.1.0
       '@radix-ui/react-slot':
         specifier: ^1.2.3
         version: 1.2.3(@types/react@18.3.23)(react@18.3.1)
@@ -806,6 +815,40 @@ packages:
     resolution: {integrity: sha512-x0LvFTekgSX+83TI28Y9wYPUfzrnl2aT5+5QLnO6v7mSJYtEEevuDRN0F0uSHRk1G1IWZC43o00Y0xDDrpBGPQ==}
     engines: {node: '>=6.9.0'}
 
+  '@dfinity/agent@3.1.0':
+    resolution: {integrity: sha512-4ktWU9KoB+Y0y84i0c2up9xmek2WjwSsbh4zGUK+o3VwZyqH8Cck4Fh4eiTa5jOve/vtfSVDbUVNFXsaS3Gttw==}
+    peerDependencies:
+      '@dfinity/candid': 3.1.0
+      '@dfinity/principal': 3.1.0
+      '@noble/hashes': ^1.8.0
+
+  '@dfinity/auth-client@3.1.0':
+    resolution: {integrity: sha512-Ww92+pX6G1M5v3Dl30AalBjsro3KLkEyj5vecp2m+jh6sJWg/nxPexREvf4JlshowpMHkAIvg6GHEg+w4881Eg==}
+    peerDependencies:
+      '@dfinity/agent': 3.1.0
+      '@dfinity/identity': 3.1.0
+      '@dfinity/principal': 3.1.0
+
+  '@dfinity/candid@3.1.0':
+    resolution: {integrity: sha512-YwZJROFmzPa4GCJJyGCoOYJ2pKmp9rboixGQSbLPekX0n0oU0mcEbuVKJFu6HY6CnoDoI8YKc9x+jlqh4n0u5A==}
+    peerDependencies:
+      '@dfinity/principal': 3.1.0
+
+  '@dfinity/cbor@0.2.2':
+    resolution: {integrity: sha512-GPJpH73kDEKbUBdUjY80lz7cq9l0vm1h/7ppejPV6O0ZTqCLrYspssYvqjRmK4aNnJ/SKXsP0rg9LYX7zpegaA==}
+
+  '@dfinity/identity@3.1.0':
+    resolution: {integrity: sha512-XI4UuzBaPh7BNaZBsQthvtrVk2S3tS24BYjKO//9+AdkNcxH3iZlzYkn6RejVaisnmztM7L0BMK3ECmGqy+OSw==}
+    peerDependencies:
+      '@dfinity/agent': 3.1.0
+      '@dfinity/candid': 3.1.0
+      '@dfinity/principal': 3.1.0
+      '@noble/curves': ^1.9.2
+      '@noble/hashes': ^1.8.0
+
+  '@dfinity/principal@3.1.0':
+    resolution: {integrity: sha512-ef2JbgwQGtam0s19bH9CaR8ztpuoNx10eC6/kBjR/R8VC2eIBlaJHvD0lXDrBWGtOPZGzEy/XAugeBr3raxZ8A==}
+
   '@emotion/is-prop-valid@1.2.2':
     resolution: {integrity: sha512-uNsoYd37AFmaCdXlg6EYD1KaPOaRWRByMCYzbKUX4+hhMfrxdVSelShywL4JVaAeM/eHUOSprYBQls+/neX3pw==}
 
@@ -1071,6 +1114,14 @@ packages:
 
   '@nicolo-ribaudo/eslint-scope-5-internals@5.1.1-v1':
     resolution: {integrity: sha512-54/JRvkLIzzDWshCWfuhadfrfZVPiElY8Fcgmg1HroEly/EDSszzhBAsarCux+D/kOslTRquNzuyGSmUSTTHGg==}
+
+  '@noble/curves@1.9.4':
+    resolution: {integrity: sha512-2bKONnuM53lINoDrSmK8qP8W271ms7pygDhZt4SiLOoLwBtoHqeCFi6RG42V8zd3mLHuJFhU/Bmaqo4nX0/kBw==}
+    engines: {node: ^14.21.3 || >=16}
+
+  '@noble/hashes@1.8.0':
+    resolution: {integrity: sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A==}
+    engines: {node: ^14.21.3 || >=16}
 
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
@@ -2388,6 +2439,9 @@ packages:
 
   https-browserify@1.0.0:
     resolution: {integrity: sha512-J+FkSdyD+0mA0N+81tMotaRMfSL9SGi+xpD3T6YApKsc3bGSXJlfXri3VyFOeYkfLRQisDk1W+jIFFKBeUBbBg==}
+
+  idb@7.1.1:
+    resolution: {integrity: sha512-gchesWBzyvGHRO9W8tzUWFDycow5gwjvFKfyV9FF32Y7F50yZMp7mP+T2mJIWFx49zicqyC4uefHM17o6xKIVQ==}
 
   ieee754@1.2.1:
     resolution: {integrity: sha512-dcyqhDvX1C46lXZcVqCpK+FtMRQVdIMN6/Df5js2zouUsqG7I6sFxitIC+7KYK29KdXOLHdu9zL4sFnoVQnqaA==}
@@ -4421,6 +4475,39 @@ snapshots:
       '@babel/helper-string-parser': 7.27.1
       '@babel/helper-validator-identifier': 7.27.1
 
+  '@dfinity/agent@3.1.0(@dfinity/candid@3.1.0(@dfinity/principal@3.1.0))(@dfinity/principal@3.1.0)(@noble/hashes@1.8.0)':
+    dependencies:
+      '@dfinity/candid': 3.1.0(@dfinity/principal@3.1.0)
+      '@dfinity/cbor': 0.2.2
+      '@dfinity/principal': 3.1.0
+      '@noble/curves': 1.9.4
+      '@noble/hashes': 1.8.0
+
+  '@dfinity/auth-client@3.1.0(@dfinity/agent@3.1.0(@dfinity/candid@3.1.0(@dfinity/principal@3.1.0))(@dfinity/principal@3.1.0)(@noble/hashes@1.8.0))(@dfinity/identity@3.1.0(@dfinity/agent@3.1.0(@dfinity/candid@3.1.0(@dfinity/principal@3.1.0))(@dfinity/principal@3.1.0)(@noble/hashes@1.8.0))(@dfinity/candid@3.1.0(@dfinity/principal@3.1.0))(@dfinity/principal@3.1.0)(@noble/curves@1.9.4)(@noble/hashes@1.8.0))(@dfinity/principal@3.1.0)':
+    dependencies:
+      '@dfinity/agent': 3.1.0(@dfinity/candid@3.1.0(@dfinity/principal@3.1.0))(@dfinity/principal@3.1.0)(@noble/hashes@1.8.0)
+      '@dfinity/identity': 3.1.0(@dfinity/agent@3.1.0(@dfinity/candid@3.1.0(@dfinity/principal@3.1.0))(@dfinity/principal@3.1.0)(@noble/hashes@1.8.0))(@dfinity/candid@3.1.0(@dfinity/principal@3.1.0))(@dfinity/principal@3.1.0)(@noble/curves@1.9.4)(@noble/hashes@1.8.0)
+      '@dfinity/principal': 3.1.0
+      idb: 7.1.1
+
+  '@dfinity/candid@3.1.0(@dfinity/principal@3.1.0)':
+    dependencies:
+      '@dfinity/principal': 3.1.0
+
+  '@dfinity/cbor@0.2.2': {}
+
+  '@dfinity/identity@3.1.0(@dfinity/agent@3.1.0(@dfinity/candid@3.1.0(@dfinity/principal@3.1.0))(@dfinity/principal@3.1.0)(@noble/hashes@1.8.0))(@dfinity/candid@3.1.0(@dfinity/principal@3.1.0))(@dfinity/principal@3.1.0)(@noble/curves@1.9.4)(@noble/hashes@1.8.0)':
+    dependencies:
+      '@dfinity/agent': 3.1.0(@dfinity/candid@3.1.0(@dfinity/principal@3.1.0))(@dfinity/principal@3.1.0)(@noble/hashes@1.8.0)
+      '@dfinity/candid': 3.1.0(@dfinity/principal@3.1.0)
+      '@dfinity/principal': 3.1.0
+      '@noble/curves': 1.9.4
+      '@noble/hashes': 1.8.0
+
+  '@dfinity/principal@3.1.0':
+    dependencies:
+      '@noble/hashes': 1.8.0
+
   '@emotion/is-prop-valid@1.2.2':
     dependencies:
       '@emotion/memoize': 0.8.1
@@ -4600,6 +4687,12 @@ snapshots:
   '@nicolo-ribaudo/eslint-scope-5-internals@5.1.1-v1':
     dependencies:
       eslint-scope: 5.1.1
+
+  '@noble/curves@1.9.4':
+    dependencies:
+      '@noble/hashes': 1.8.0
+
+  '@noble/hashes@1.8.0': {}
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:
@@ -6235,6 +6328,8 @@ snapshots:
     optional: true
 
   https-browserify@1.0.0: {}
+
+  idb@7.1.1: {}
 
   ieee754@1.2.1: {}
 
