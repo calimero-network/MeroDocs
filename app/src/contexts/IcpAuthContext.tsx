@@ -84,7 +84,7 @@ class AuthService {
 
   subscribe(listener: (authState: AuthState) => void): () => void {
     this.listeners.push(listener);
-    listener(this.getAuthState()); 
+    listener(this.getAuthState());
     return () => {
       this.listeners = this.listeners.filter((l) => l !== listener);
     };
