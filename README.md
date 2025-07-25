@@ -4,7 +4,7 @@
 
 ---
 
-## 🔧 Project Overview & Current Status
+## Project Overview & Current Status
 
 ### Default Context (User’s Private Workspace)
 - Each user creates a **private default context** on their node.
@@ -37,7 +37,7 @@
 
 ---
 
-## 📘 Workflow Flowchart
+## Workflow Flowchart
 
 <p align="center">
   <img src="assets/MeroDocsFlowDark.png" alt="MeroDocs Workflow" width="700"/>
@@ -45,7 +45,7 @@
 
 ---
 
-## 🧩 Features Overview
+## Features Overview
 
 | Feature                        | Description                                                                 |
 |---------------------------------|-----------------------------------------------------------------------------|
@@ -60,7 +60,75 @@
 
 ---
 
-## 🛠 Technical Implementation Details
+## Tutorial: App Setup
+
+### Logic
+
+```bash title="Terminal"
+cd logic
+```
+
+```bash title="Terminal"
+chmod +x ./build.sh
+```
+
+```bash title="Terminal"
+./build.sh
+```
+### Canister
+
+For detailed canister setup and deployment, see [`merodocs_registry/BUILD.md`](merodocs_registry/BUILD.md).
+
+Once your canister is deployed, set the following environment variables in your `app/.env` file:
+
+```
+VITE_DFX_NETWORK=local
+VITE_LOCAL_PRINCIPAL_ID=<your_local_principal_id>
+VITE_BACKEND_CANISTER_ID=<your_backend_canister_id>
+VITE_INTERNET_IDENTITY_CANISTER_ID=<your_internet_idenetity_canister_id>
+```
+
+Replace the placeholder values with your actual deployed canister and principal IDs.
+
+---
+
+### App
+
+```bash title="Terminal"
+cd app
+```
+
+```bash title="Terminal"
+pnpm install
+```
+
+```bash title="Terminal"
+pnpm build
+```
+
+```bash title="Terminal"
+pnpm dev
+```
+
+Open the app in your browser and connect to your running node.
+
+The app will be deployed and accessible at:  [http://localhost:5173/mero-docs/](http://localhost:5173/mero-docs/)
+
+---
+
+### Initial Application Context Initialization
+
+To initialize your application context, run:
+
+```bash
+cargo run -p meroctl -- --node nodeX context create --application-id <APP_ID> --protocol near --params '{"is_private": true,"context_name": "default"}'
+```
+
+Replace `<APP_ID>`, `nodeX`, and other parameters as needed for your deployment.
+
+---
+
+## Technical Implementation Details
 
 **Calimero-Based Contexts**
 - User-specific default context stores local signatures and membership.
@@ -71,11 +139,9 @@
 - SHA‑256 hashes recorded for both original and signed PDFs.
 - Public verification without exposing sensitive content.
 
-
-
 ---
 
-## 🔐 Security & Privacy Assurance
+## Security & Privacy Assurance
 
 - All documents remain encrypted within Calimero contexts.
 - Only hashes are stored on-chain—no files ever leave user nodes.
