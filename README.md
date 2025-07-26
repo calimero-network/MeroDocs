@@ -121,7 +121,7 @@ The app will be deployed and accessible at:  [http://localhost:5173/mero-docs/](
 To initialize your application context, run:
 
 ```bash
-cargo run -p meroctl -- --node nodeX context create --application-id <APP_ID> --protocol near --params '{"is_private": true,"context_name": "default"}'
+cargo run -p meroctl -- --node nodeX context create --application-id <APP_ID> --protocol icp --params '{"is_private": true,"context_name": "default"}'
 ```
 
 Replace `<APP_ID>`, `nodeX`, and other parameters as needed for your deployment.
