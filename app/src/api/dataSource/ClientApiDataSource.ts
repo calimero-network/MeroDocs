@@ -334,8 +334,6 @@ export class ClientApiDataSource implements ClientApi {
     }
   }
 
-
-
   async joinSharedContext(
     contextId: string,
     sharedIdentity: UserId,
