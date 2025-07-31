@@ -15,8 +15,8 @@ export default function App() {
     <IcpAuthProvider>
       <ThemeProvider>
         <BrowserRouter basename="/mero-docs/">
-       <MobileLayout>
-       {isAuthenticated && <Routes>
+          <MobileLayout>
+            {isAuthenticated && <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/agreement" element={<AgreementPage />} />
               <Route path="/signatures" element={<SignaturesPage />} />

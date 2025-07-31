@@ -8,8 +8,8 @@ export class AgreementService {
   private contextApi: ContextApiDataSource;
   private clientApi: ClientApiDataSource;
 
-  constructor() {
-    this.contextApi = new ContextApiDataSource();
+  constructor(app?: any) {
+    this.contextApi = new ContextApiDataSource(app);
     this.clientApi = new ClientApiDataSource();
   }
 

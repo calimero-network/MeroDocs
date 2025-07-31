@@ -1,9 +1,4 @@
 import axios from 'axios';
-import {
-  getAppEndpointKey,
-  getApplicationId,
-  type ApiResponse,
-} from '@calimero-network/calimero-client';
 import type {
   CreateContextProps,
   CreateContextResponse,
@@ -15,44 +10,32 @@ import type {
   VerifyContextResponse,
 } from '../nodeApi';
 
-const DEFAULT_NODE_ENDPOINT = 'http://localhost:2428';
-
+// This class now needs to be instantiated with the app object from useCalimero
 export class ContextApiDataSource implements NodeApi {
+  private app: any;
+
+  constructor(app: any) {
+    this.app = app;
+  }
+
   async createContext(
     props: CreateContextProps,
-  ): ApiResponse<CreateContextResponse> {
+  ): Promise<{ data?: CreateContextResponse; error?: any }> {
     try {
-      const jsonData = {
-        is_private: props.is_private,
-        context_name: props.context_name,
-      };
-      const jsonString = JSON.stringify(jsonData);
-      const encoder = new TextEncoder();
-      const bytes = encoder.encode(jsonString);
-      const byteArray = Array.from(bytes);
+      if (!this.app) {
+        throw new Error('App not initialized');
+      }
 
-      const nodeEndpoint = getAppEndpointKey() || DEFAULT_NODE_ENDPOINT;
-
-      const response = await axios.post(`${nodeEndpoint}/admin-api/contexts`, {
-        applicationId: getApplicationId() || '',
-        protocol: 'near',
-        initializationParams: byteArray,
+      // Use the new app.createContext() method
+      const result = await this.app.createContext({
+        name: props.context_name,
+        isPrivate: props.is_private,
       });
 
-      if (response.status === 200) {
-        return {
-          data: response.data.data,
-          error: null,
-        };
-      } else {
-        return {
-          data: null,
-          error: {
-            code: response.status,
-            message: response.statusText,
-          },
-        };
-      }
+      return {
+        data: result,
+        error: null,
+      };
     } catch (error) {
       console.error('createContext failed:', error);
       let errorMessage = 'An unexpected error occurred during createContext';
@@ -60,7 +43,7 @@ export class ContextApiDataSource implements NodeApi {
         errorMessage = error.message;
       }
       return {
-        data: null,
+        data: undefined,
         error: {
           code: 500,
           message: errorMessage,
@@ -69,32 +52,23 @@ export class ContextApiDataSource implements NodeApi {
     }
   }
 
-  async inviteToContext(props: InviteToContextProps): ApiResponse<string> {
+  async inviteToContext(props: InviteToContextProps): Promise<{ data?: string; error?: any }> {
     try {
-      const nodeEndpoint = getAppEndpointKey() || DEFAULT_NODE_ENDPOINT;
-      const response = await axios.post(
-        `${nodeEndpoint}/admin-api/contexts/invite`,
-        {
-          contextId: props.contextId,
-          inviterId: props.inviter,
-          inviteeId: props.invitee,
-        },
-      );
-
-      if (response.status === 200) {
-        return {
-          data: response.data.data,
-          error: null,
-        };
-      } else {
-        return {
-          data: null,
-          error: {
-            code: response.status,
-            message: response.statusText,
-          },
-        };
+      if (!this.app) {
+        throw new Error('App not initialized');
       }
+
+      // Use the new app.inviteToContext() method
+      const result = await this.app.inviteToContext({
+        contextId: props.contextId,
+        inviterId: props.inviter,
+        inviteeId: props.invitee,
+      });
+
+      return {
+        data: result,
+        error: null,
+      };
     } catch (error) {
       console.error('inviteToContext failed:', error);
       let errorMessage = 'An unexpected error occurred during inviteToContext';
@@ -102,7 +76,7 @@ export class ContextApiDataSource implements NodeApi {
         errorMessage = error.message;
       }
       return {
-        data: null,
+        data: undefined,
         error: {
           code: 500,
           message: errorMessage,
@@ -111,30 +85,21 @@ export class ContextApiDataSource implements NodeApi {
     }
   }
 
-  async joinContext(props: JoinContextProps): ApiResponse<JoinContextResponse> {
+  async joinContext(props: JoinContextProps): Promise<{ data?: JoinContextResponse; error?: any }> {
     try {
-      const nodeEndpoint = getAppEndpointKey() || DEFAULT_NODE_ENDPOINT;
-      const response = await axios.post(
-        `${nodeEndpoint}/admin-api/contexts/join`,
-        {
-          invitationPayload: props.invitationPayload,
-        },
-      );
-
-      if (response.status === 200) {
-        return {
-          data: response.data.data,
-          error: null,
-        };
-      } else {
-        return {
-          data: null,
-          error: {
-            code: response.status,
-            message: response.statusText,
-          },
-        };
+      if (!this.app) {
+        throw new Error('App not initialized');
       }
+
+      // Use the new app.joinContext() method
+      const result = await this.app.joinContext({
+        invitationPayload: props.invitationPayload,
+      });
+
+      return {
+        data: result,
+        error: null,
+      };
     } catch (error) {
       console.error('joinContext failed:', error);
       let errorMessage = 'An unexpected error occurred during joinContext';
@@ -142,7 +107,7 @@ export class ContextApiDataSource implements NodeApi {
         errorMessage = error.message;
       }
       return {
-        data: null,
+        data: undefined,
         error: {
           code: 500,
           message: errorMessage,
@@ -153,31 +118,25 @@ export class ContextApiDataSource implements NodeApi {
 
   async verifyContext(
     props: VerifyContextProps,
-  ): ApiResponse<VerifyContextResponse> {
+  ): Promise<{ data?: VerifyContextResponse; error?: any }> {
     try {
-      const nodeEndpoint = getAppEndpointKey() || DEFAULT_NODE_ENDPOINT;
-      const response = await axios.get(
-        `${nodeEndpoint}/admin-api/contexts/${props.contextId}`,
-      );
-
-      if (response.status === 200) {
-        return {
-          data: { joined: response.data.data.rootHash ? true : false },
-          error: null,
-        };
-      } else {
-        return {
-          data: null,
-          error: {
-            code: response.status,
-            message: response.statusText,
-          },
-        };
+      if (!this.app) {
+        throw new Error('App not initialized');
       }
+
+      // Use the new app.verifyContext() method
+      const result = await this.app.verifyContext({
+        contextId: props.contextId,
+      });
+
+      return {
+        data: { joined: result.joined || false },
+        error: null,
+      };
     } catch (error) {
       console.error('Error fetching context:', error);
       return {
-        data: null,
+        data: undefined,
         error: { code: 500, message: 'Failed to fetch context data.' },
       };
     }

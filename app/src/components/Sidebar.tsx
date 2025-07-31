@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Home, PenTool, LogOut, X } from 'lucide-react';
-import { clientLogout } from '@calimero-network/calimero-client';
+import { useCalimero } from '@calimero-network/calimero-client';
 import { useIcpAuth } from '../contexts/IcpAuthContext';
 
 interface SidebarProps {
@@ -14,6 +14,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const location = useLocation();
   const icpAuth = useIcpAuth();
   const [isLoading, setIsLoading] = React.useState(false);
+  const { logout } = useCalimero();
 
   const navItems = [
     { icon: Home, label: 'Dashboard', path: '/' },
@@ -33,7 +34,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       localStorage.removeItem('agreementContextUserID');
     }
     navigate('/');
-    clientLogout();
+    logout();
     onClose();
   };
 
