@@ -2,6 +2,7 @@ import React from 'react';
 import { Menu, Sun, Moon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
+import { CalimeroConnectButton } from '@calimero-network/calimero-client';
 
 interface MobileHeaderProps {
   onMenuToggle: () => void;
@@ -56,6 +57,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({ onMenuToggle }) => {
       </div>
 
       <div className="flex items-center">
+        <CalimeroConnectButton />
         <button
           onClick={toggleTheme}
           className="bg-transparent border-none p-2 rounded-lg cursor-pointer flex items-center justify-center min-w-[44px] min-h-[44px] transition-all duration-200 hover:bg-opacity-10 active:scale-95"
