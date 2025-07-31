@@ -103,9 +103,7 @@ enum AuditAction {
     ConsentGiven,
     SignatureApplied,
     DocumentCompleted,
-    DocumentCancelled,
     SignerAdded,
-    SignerRemoved,
 }
 
 #[derive(CandidType, Deserialize)]

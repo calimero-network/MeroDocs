@@ -12,8 +12,6 @@ export const idlFactory = ({ IDL }) => {
   const AuditAction = IDL.Variant({
     'DocumentUploaded' : IDL.Null,
     'ConsentGiven' : IDL.Null,
-    'SignerRemoved' : IDL.Null,
-    'DocumentCancelled' : IDL.Null,
     'SignerAdded' : IDL.Null,
     'SignatureApplied' : IDL.Null,
     'DocumentCompleted' : IDL.Null,

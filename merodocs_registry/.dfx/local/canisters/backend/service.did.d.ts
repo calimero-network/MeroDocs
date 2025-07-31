@@ -4,8 +4,6 @@ import type { IDL } from '@dfinity/candid';
 
 export type AuditAction = { 'DocumentUploaded' : null } |
   { 'ConsentGiven' : null } |
-  { 'SignerRemoved' : null } |
-  { 'DocumentCancelled' : null } |
   { 'SignerAdded' : null } |
   { 'SignatureApplied' : null } |
   { 'DocumentCompleted' : null } |
