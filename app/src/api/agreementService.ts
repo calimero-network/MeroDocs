@@ -10,7 +10,7 @@ export class AgreementService {
 
   constructor(app?: any) {
     this.contextApi = new ContextApiDataSource(app);
-    this.clientApi = new ClientApiDataSource();
+    this.clientApi = new ClientApiDataSource(app);
   }
 
   async createAgreement(name: string): ApiResponse<Agreement> {
@@ -92,6 +92,9 @@ export class AgreementService {
 
       const contexts = contextsResponse.data as ContextMetadata[];
 
+      console.log('AgreementService: contextsResponse.data:', contextsResponse.data);
+      console.log('AgreementService: contexts:', contexts);
+
       if (!contexts || !Array.isArray(contexts)) {
         console.error(
           'AgreementService: Invalid contexts data, expected array but got:',
@@ -105,16 +108,35 @@ export class AgreementService {
       }
 
       // Convert contexts to agreements
-      const agreements: Agreement[] = contexts.map((context) => ({
-        id: context.context_id,
-        name: context.context_name,
-        contextId: context.context_id,
-        memberPublicKey: context.shared_identity,
-        role: context.role,
-        joinedAt: context.joined_at,
-        privateIdentity: context.private_identity,
-        sharedIdentity: context.shared_identity,
-      }));
+      const agreements: Agreement[] = contexts.map((context: any) => {
+        console.log('AgreementService: processing context:', context);
+        
+        // Handle new API structure
+        if (context.contextId) {
+          return {
+            id: context.contextId,
+            name: `Agreement ${context.contextId.slice(0, 8)}...`, // Generate a name since it's not provided
+            contextId: context.contextId,
+            memberPublicKey: context.executorId,
+            role: 'Owner', // Default role
+            joinedAt: Date.now(), // Default timestamp
+            privateIdentity: context.executorId,
+            sharedIdentity: context.executorId,
+          };
+        }
+        
+        // Handle old API structure (fallback)
+        return {
+          id: context.context_id,
+          name: context.context_name,
+          contextId: context.context_id,
+          memberPublicKey: context.shared_identity,
+          role: context.role,
+          joinedAt: context.joined_at,
+          privateIdentity: context.private_identity,
+          sharedIdentity: context.shared_identity,
+        };
+      });
 
       return {
         data: agreements,

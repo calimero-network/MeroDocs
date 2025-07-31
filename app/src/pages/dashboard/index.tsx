@@ -76,7 +76,7 @@ export default function Dashboard() {
 
   const agreementService = useMemo(() => new AgreementService(app), [app]);
   const nodeApiService = useMemo(() => new ContextApiDataSource(app), [app]);
-  const clientApiService = useMemo(() => new ClientApiDataSource(), []);
+  const clientApiService = useMemo(() => new ClientApiDataSource(app), [app]);
 
   const showNotification = useCallback(
     (message: string, type: NotificationType) => {
@@ -127,12 +127,21 @@ export default function Dashboard() {
     },
   ];
 
+  console.log('Dashboard: agreements array:', agreements);
+  
   const filteredContexts = agreements.filter((agreement) => {
+    console.log('Dashboard: filtering agreement:', agreement);
+    if (!agreement.name) {
+      console.log('Dashboard: agreement has no name, filtering out');
+      return false;
+    }
     const matchesSearch = agreement.name
       .toLowerCase()
       .includes(searchQuery.toLowerCase());
     return matchesSearch;
   });
+  
+  console.log('Dashboard: filteredContexts:', filteredContexts);
 
   const containerVariants = {
     hidden: { opacity: 0 },

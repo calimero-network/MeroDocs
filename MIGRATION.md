@@ -15,6 +15,6 @@ This document outlines the files that need to be migrated to the new `@calimero-
 - [ ] `app/src/api/clientApi.ts`
 - [ ] `app/src/api/documentService.ts`
 - [ ] `app/src/api/nodeApi.ts`
-- [ ] `app/src/api/dataSource/ClientApiDataSource.ts`
+- [x] `app/src/api/dataSource/ClientApiDataSource.ts`
 - [ ] `app/src/api/dataSource/nodeApiDataSource.ts`
 - [x] `app/src/index.tsx` 

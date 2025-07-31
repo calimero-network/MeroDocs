@@ -1,4 +1,3 @@
-import axios from 'axios';
 import type {
   CreateContextProps,
   CreateContextResponse,
@@ -26,21 +25,19 @@ export class ContextApiDataSource implements NodeApi {
         throw new Error('App not initialized');
       }
 
-      // Prepare the initialization parameters as byte array (matching original format)
-      const jsonData = {
+      // Prepare the initialization parameters for the new API
+
+      // Prepare the initialization parameters
+      const initParams = {
         is_private: props.is_private,
         context_name: props.context_name,
       };
-      const jsonString = JSON.stringify(jsonData);
-      const encoder = new TextEncoder();
-      const bytes = encoder.encode(jsonString);
-      const byteArray = Array.from(bytes);
-
-      // Use the new app.createContext() method with the correct format
-      const result = await this.app.createContext({
-        protocol: 'near',
-        initializationParams: byteArray,
-      });
+      
+      console.log('createContext initParams:', initParams);
+      
+      // Use the new API with correct parameter order:
+      // createContext(protocol, initParams)
+      const result = await this.app.createContext(undefined, initParams);
 
       return {
         data: result,

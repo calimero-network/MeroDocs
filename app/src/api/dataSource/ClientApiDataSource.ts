@@ -50,6 +50,11 @@ function getContextSpecificAuthConfig(
 }
 
 export class ClientApiDataSource implements ClientApi {
+  private app: any;
+
+  constructor(app?: any) {
+    this.app = app;
+  }
   async addParticipant(
     contextId: string,
     userId: UserId,
@@ -362,17 +367,36 @@ export class ClientApiDataSource implements ClientApi {
 
   async listJoinedContexts(): Promise<any> {
     try {
-      const response = await rpcClient.execute({
-        ...getAuthConfig(),
-        method: ClientMethod.LIST_JOINED_CONTEXTS,
-        argsJson: {},
-      } as RpcQueryParams<any>);
+      console.log('listJoinedContexts: Starting...');
+      
+      if (this.app) {
+        // Use the new API
+        console.log('listJoinedContexts: Using new API');
+        const result = await this.app.fetchContexts();
+        console.log('listJoinedContexts: new API result:', result);
+        return {
+          data: result.data || result,
+        };
+      } else {
+        // Fallback to old API
+        console.log('listJoinedContexts: Using old API');
+        const authConfig = getAuthConfig();
+        console.log('listJoinedContexts: authConfig:', authConfig);
+        
+        const response = await rpcClient.execute({
+          ...authConfig,
+          method: ClientMethod.LIST_JOINED_CONTEXTS,
+          argsJson: {},
+        } as RpcQueryParams<any>);
 
-      const data = response.result?.output || response.result;
+        console.log('listJoinedContexts: response:', response);
+        const data = response.result?.output || response.result;
+        console.log('listJoinedContexts: data:', data);
 
-      return {
-        data: data,
-      };
+        return {
+          data: data,
+        };
+      }
     } catch (error: any) {
       console.error('ClientApiDataSource: Error in listJoinedContexts:', error);
       return {

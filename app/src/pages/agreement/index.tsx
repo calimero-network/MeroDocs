@@ -157,7 +157,7 @@ const AgreementPage: React.FC = () => {
   const { identity } = useIcpAuth();
   const { app } = useCalimero();
   const documentService = useMemo(() => new DocumentService(), []);
-  const clientApiService = useMemo(() => new ClientApiDataSource(), []);
+  const clientApiService = useMemo(() => new ClientApiDataSource(app), [app]);
   const nodeApiService = useMemo(() => new ContextApiDataSource(app), [app]);
 
   const [searchQuery, setSearchQuery] = useState('');
