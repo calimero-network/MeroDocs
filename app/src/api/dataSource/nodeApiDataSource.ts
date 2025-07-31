@@ -26,10 +26,20 @@ export class ContextApiDataSource implements NodeApi {
         throw new Error('App not initialized');
       }
 
-      // Use the new app.createContext() method
+      // Prepare the initialization parameters as byte array (matching original format)
+      const jsonData = {
+        is_private: props.is_private,
+        context_name: props.context_name,
+      };
+      const jsonString = JSON.stringify(jsonData);
+      const encoder = new TextEncoder();
+      const bytes = encoder.encode(jsonString);
+      const byteArray = Array.from(bytes);
+
+      // Use the new app.createContext() method with the correct format
       const result = await this.app.createContext({
-        name: props.context_name,
-        isPrivate: props.is_private,
+        protocol: 'near',
+        initializationParams: byteArray,
       });
 
       return {
