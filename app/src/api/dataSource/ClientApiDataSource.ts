@@ -40,11 +40,12 @@ function getContextSpecificAuthConfig(
   agreementContextID: string,
   agreementContextUserID: string,
 ) {
+  const baseAuthConfig = getAuthConfig();
   return {
     appEndpointKey: getAppEndpointKey(),
     contextId: agreementContextID,
     executorPublicKey: agreementContextUserID,
-    jwtToken: null,
+    jwtToken: baseAuthConfig.jwtToken,
     error: null,
   };
 }
@@ -262,16 +263,44 @@ export class ClientApiDataSource implements ClientApi {
     name: string,
     blobIdStr: string,
     dataSize: number,
+    contextId?: string,
+    agreementContextID?: string,
+    agreementContextUserID?: string,
+    signatureContextUserID?: string,
   ): Promise<any> {
     try {
+      // For signatures, we need to use the signature context as the main context
+      // If contextId is provided (signature context), use it as the main context
+      let authConfig;
+      if (contextId) {
+        // Use the signature context as the main context
+        const baseAuthConfig = getAuthConfig();
+        authConfig = {
+          ...baseAuthConfig,
+          contextId: contextId,
+          executorPublicKey: signatureContextUserID || baseAuthConfig.executorPublicKey,
+        };
+      } else {
+        // Fallback to agreement context if no signature context
+        authConfig =
+          agreementContextID && agreementContextUserID
+            ? getContextSpecificAuthConfig(
+                agreementContextID,
+                agreementContextUserID,
+              )
+            : getAuthConfig();
+      }
+
+      const argsJson: any = {
+        name,
+        blob_id_str: blobIdStr,
+        data_size: dataSize,
+      };
+
       const response = await rpcClient.execute({
-        ...getAuthConfig(),
+        ...authConfig,
         method: ClientMethod.CREATE_SIGNATURE,
-        argsJson: {
-          name,
-          blob_id_str: blobIdStr,
-          data_size: dataSize,
-        },
+        argsJson,
       } as RpcQueryParams<any>);
       return {
         data: response.result,
@@ -283,14 +312,44 @@ export class ClientApiDataSource implements ClientApi {
     }
   }
 
-  async deleteSignature(signatureId: number): Promise<any> {
+  async deleteSignature(
+    signatureId: number,
+    contextId?: string,
+    agreementContextID?: string,
+    agreementContextUserID?: string,
+    signatureContextUserID?: string,
+  ): Promise<any> {
     try {
+      // For signatures, we need to use the signature context as the main context
+      // If contextId is provided (signature context), use it as the main context
+      let authConfig;
+      if (contextId) {
+        // Use the signature context as the main context
+        const baseAuthConfig = getAuthConfig();
+        authConfig = {
+          ...baseAuthConfig,
+          contextId: contextId,
+          executorPublicKey: signatureContextUserID || baseAuthConfig.executorPublicKey,
+        };
+      } else {
+        // Fallback to agreement context if no signature context
+        authConfig =
+          agreementContextID && agreementContextUserID
+            ? getContextSpecificAuthConfig(
+                agreementContextID,
+                agreementContextUserID,
+              )
+            : getAuthConfig();
+      }
+
+      const argsJson: any = {
+        signature_id: signatureId,
+      };
+
       const response = await rpcClient.execute({
-        ...getAuthConfig(),
+        ...authConfig,
         method: ClientMethod.DELETE_SIGNATURE,
-        argsJson: {
-          signature_id: signatureId,
-        },
+        argsJson,
       } as RpcQueryParams<any>);
       return {
         data: response.result,
@@ -302,12 +361,40 @@ export class ClientApiDataSource implements ClientApi {
     }
   }
 
-  async listSignatures(): Promise<any> {
+  async listSignatures(
+    contextId?: string,
+    agreementContextID?: string,
+    agreementContextUserID?: string,
+    signatureContextUserID?: string,
+  ): Promise<any> {
     try {
+      // For signatures, we need to use the signature context as the main context
+      // If contextId is provided (signature context), use it as the main context
+      let authConfig;
+      if (contextId) {
+        // Use the signature context as the main context
+        const baseAuthConfig = getAuthConfig();
+        authConfig = {
+          ...baseAuthConfig,
+          contextId: contextId,
+          executorPublicKey: signatureContextUserID || baseAuthConfig.executorPublicKey,
+        };
+      } else {
+        // Fallback to agreement context if no signature context
+        authConfig =
+          agreementContextID && agreementContextUserID
+            ? getContextSpecificAuthConfig(
+                agreementContextID,
+                agreementContextUserID,
+              )
+            : getAuthConfig();
+      }
+
+      console.log('About to execute rpcClient with authConfig:', authConfig);
       const response = await rpcClient.execute({
-        ...getAuthConfig(),
+        ...authConfig,
         method: ClientMethod.LIST_SIGNATURES,
-        argsJson: {},
+        argsJson: {}, // No need for context_id in argsJson since it's in the main contextId
       } as RpcQueryParams<any>);
 
       const extractedData = response.result?.output || response.result;

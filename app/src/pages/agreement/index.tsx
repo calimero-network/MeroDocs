@@ -362,6 +362,8 @@ const AgreementPage: React.FC = () => {
           }
         );
 
+        console.log('uploadBlob result:', result);
+
         if (result.error) {
           setUploadFiles((prev) =>
             prev.map((f) => ({
@@ -376,6 +378,36 @@ const AgreementPage: React.FC = () => {
           return;
         }
 
+        // Handle different possible return formats
+        let blobId: string | undefined;
+        
+        if (result.data && result.data.blobId) {
+          // Expected format: { data: { blobId: string } }
+          blobId = result.data.blobId;
+        } else if (result.blobId) {
+          // Alternative format: { blobId: string }
+          blobId = result.blobId;
+        } else if (typeof result === 'string') {
+          // Direct string format: "blobId"
+          blobId = result;
+        }
+
+        if (!blobId) {
+          const errorMsg = 'Upload succeeded but no blob ID returned';
+          console.error('uploadBlob result structure:', result);
+          setUploadFiles((prev) =>
+            prev.map((f) => ({
+              ...f,
+              uploading: false,
+              error: errorMsg,
+            })),
+          );
+          setUploading(false);
+          setError(errorMsg);
+          console.error(`Failed to upload ${file.name}:`, errorMsg);
+          return;
+        }
+
         // Calculate hash from file for verification
         const arrayBuffer = await file.arrayBuffer();
         const pdfData = new Uint8Array(arrayBuffer);
@@ -386,7 +418,7 @@ const AgreementPage: React.FC = () => {
           currentContextId,
           file.name,
           hash,
-          result.data.blobId,
+          blobId,
           file.size,
           agreementContextID || undefined,
           agreementContextUserID || undefined,
@@ -669,8 +701,12 @@ const AgreementPage: React.FC = () => {
   useEffect(() => {
     if (!currentContextId || !app) return;
 
-    // Connect to WebSocket
-    (app as any).connect();
+    // Connect to WebSocket with error handling
+    try {
+      (app as any).connect();
+    } catch (error) {
+      console.warn('WebSocket connection failed, continuing without real-time updates:', error);
+    }
 
     // Add event handler
     const handleEvent = async (event: any) => {
@@ -682,14 +718,27 @@ const AgreementPage: React.FC = () => {
         console.error('Error handling state mutation event:', err);
       }
     };
-    (app as any).addCallback(handleEvent);
+    
+    try {
+      (app as any).addCallback(handleEvent);
+    } catch (error) {
+      console.warn('Failed to add WebSocket callback:', error);
+    }
 
     // Subscribe to context
-    (app as any).subscribe([{ contextId: currentContextId, executorId: '', applicationId: '' }]);
+    try {
+      (app as any).subscribe([{ contextId: currentContextId, executorId: '', applicationId: '' }]);
+    } catch (error) {
+      console.warn('Failed to subscribe to context:', error);
+    }
 
     return () => {
-      (app as any).removeCallback(handleEvent);
-      (app as any).disconnect();
+      try {
+        (app as any).removeCallback(handleEvent);
+        (app as any).disconnect();
+      } catch (error) {
+        console.warn('Error during WebSocket cleanup:', error);
+      }
     };
   }, [currentContextId, loadDocuments, loadContextDetails, app]);
 

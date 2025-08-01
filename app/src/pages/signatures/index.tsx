@@ -3,7 +3,7 @@ import { PenTool, Plus, Trash2 } from 'lucide-react';
 import { MobileLayout } from '../../components/MobileLayout';
 import SignaturePadComponent from '../../components/SignaturePad';
 import { ClientApiDataSource } from '../../api/dataSource/ClientApiDataSource';
-import { blobClient, getContextId } from '@calimero-network/calimero-client';
+import { useCalimero } from '@calimero-network/calimero-client';
 
 const api = new ClientApiDataSource();
 
@@ -15,6 +15,7 @@ interface SavedSignature {
 }
 
 export default function SignaturesPage() {
+  const { app } = useCalimero();
   const [signatures, setSignatures] = useState<SavedSignature[]>([]);
   const [showSignaturePad, setShowSignaturePad] = useState(false);
   const [deleteSignatureId, setDeleteSignatureId] = useState<string | null>(
@@ -23,13 +24,86 @@ export default function SignaturesPage() {
 
   const fetchSignatures = useCallback(async () => {
     try {
-      const response = await api.listSignatures();
+      // For signatures, we need to use a private context
+      let signatureContextId = localStorage.getItem('signatureContextId');
+      const agreementContextID = localStorage.getItem('agreementContextID');
+      const agreementContextUserID = localStorage.getItem('agreementContextUserID');
+      
+              // If no signature context exists, create one
+        if (!signatureContextId && app) {
+          try {
+            console.log('Creating private context for signatures...');
+            const contextResult = await (app as any).createContext(undefined, {
+              is_private: true,
+              context_name: 'Signatures Private Context',
+            });
+            
+            if (contextResult && contextResult.contextId) {
+              signatureContextId = contextResult.contextId as string;
+              const signatureContextUserID = contextResult.memberPublicKey as string;
+              localStorage.setItem('signatureContextId', signatureContextId);
+              localStorage.setItem('signatureContextUserID', signatureContextUserID);
+              console.log('Created signature context:', signatureContextId, 'with user ID:', signatureContextUserID);
+            }
+          } catch (error) {
+            console.error('Failed to create signature context:', error);
+            // If we can't create a context, just return empty signatures
+            setSignatures([]);
+            return;
+          }
+        }
+      
+      // If still no signature context, return empty list
+      if (!signatureContextId) {
+        console.log('No signature context available, returning empty list');
+        setSignatures([]);
+        return;
+      }
+      
+      const signatureContextUserID = localStorage.getItem('signatureContextUserID');
+      
+      console.log('Debug signature context:', {
+        signatureContextId,
+        signatureContextUserID,
+        agreementContextID,
+        agreementContextUserID
+      });
+      
+      // Try to get the current user's public key from the app object
+      let currentUserPublicKey = signatureContextUserID;
+      if (app && !currentUserPublicKey) {
+        try {
+          // Try to get the current user's public key from the app
+          const userInfo = await (app as any).getCurrentUser();
+          if (userInfo && userInfo.publicKey) {
+            currentUserPublicKey = userInfo.publicKey;
+            console.log('Got current user public key from app:', currentUserPublicKey);
+          }
+        } catch (error) {
+          console.error('Failed to get current user from app:', error);
+        }
+      }
+      
+      // If still no public key, use agreement context user ID as fallback
+      if (!currentUserPublicKey && agreementContextUserID) {
+        currentUserPublicKey = agreementContextUserID;
+        console.log('Using agreement context user ID as fallback:', currentUserPublicKey);
+      }
+      
+      const response = await api.listSignatures(
+        signatureContextId!,
+        agreementContextID || undefined,
+        agreementContextUserID || undefined,
+        currentUserPublicKey || undefined,
+      );
       if (!response.data || !Array.isArray(response.data)) {
         setSignatures([]);
         return;
       }
 
-      const contextId = getContextId();
+      // Use the signature context ID for blob operations
+      const contextIdForBlobs = signatureContextId;
+      
       const signaturesWithImages = await Promise.all(
         response.data.map(async (sig: any) => {
           let dataURL = '';
@@ -39,16 +113,16 @@ export default function SignaturesPage() {
                 ? sig.blob_id
                 : Buffer.from(sig.blob_id).toString('hex');
 
-            const blob = await blobClient.downloadBlob(
-              blobId,
-              contextId || undefined,
-            );
-            if (blob) {
-              dataURL = await new Promise<string>((resolve) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result as string);
-                reader.readAsDataURL(blob);
-              });
+            if (app) {
+              const result = await (app as any).downloadBlob(blobId);
+              if (result && result.data) {
+                const blob = result.data;
+                dataURL = await new Promise<string>((resolve) => {
+                  const reader = new FileReader();
+                  reader.onloadend = () => resolve(reader.result as string);
+                  reader.readAsDataURL(blob);
+                });
+              }
             }
           } catch (e) {
             console.error(
@@ -69,7 +143,7 @@ export default function SignaturesPage() {
       console.error('Failed to list signatures:', error);
       setSignatures([]);
     }
-  }, []);
+  }, [app]);
 
   useEffect(() => {
     fetchSignatures();
@@ -90,26 +164,39 @@ export default function SignaturesPage() {
 
   const uploadSignatureBlob = async (blob: Blob) => {
     const file = new File([blob], 'signature.png', { type: blob.type });
-    const contextId = getContextId();
+    const signatureContextId = localStorage.getItem('signatureContextId');
     const onProgress = (progress: number) => {};
 
-    const blobResponse = await blobClient.uploadBlob(
-      file,
-      onProgress,
-      '',
-      contextId || undefined,
-    );
+    if (!app) {
+      throw new Error('App not initialized');
+    }
 
-    if (blobResponse.error || !blobResponse.data?.blobId) {
-      const errorMessage =
-        blobResponse.error?.message ?? 'Failed to get blob ID from upload';
+    const result = await (app as any).uploadBlob(file, onProgress);
+
+    // Handle different possible return formats (same as agreement page)
+    let blobId: string | undefined;
+    
+    if (result.data && result.data.blobId) {
+      // Expected format: { data: { blobId: string } }
+      blobId = result.data.blobId;
+    } else if (result.blobId) {
+      // Alternative format: { blobId: string }
+      blobId = result.blobId;
+    } else if (typeof result === 'string') {
+      // Direct string format: "blobId"
+      blobId = result;
+    }
+
+    if (!blobId) {
+      const errorMessage = 'Failed to get blob ID from upload';
       console.error(`Upload failed:`, errorMessage);
+      console.error('uploadBlob result structure:', result);
       throw new Error(errorMessage);
     }
 
-    console.log(`Upload completed: ${blobResponse.data.blobId}`);
+    console.log(`Upload completed: ${blobId}`);
     return {
-      blobId: blobResponse.data.blobId,
+      blobId: blobId,
       size: file.size,
     };
   };
@@ -123,8 +210,51 @@ export default function SignaturesPage() {
       const blob = dataURLToBlob(signatureData);
       const { blobId, size } = await uploadSignatureBlob(blob);
 
+      // Get current context ID from localStorage
+      const currentContextId = localStorage.getItem('currentContextId');
+      const agreementContextID = localStorage.getItem('agreementContextID');
+      const agreementContextUserID = localStorage.getItem('agreementContextUserID');
+
+      // For signatures, we need to use a private context
+      // If we don't have a private context for signatures, create one
+      let signatureContextId = localStorage.getItem('signatureContextId');
+      
+      if (!signatureContextId && app) {
+        try {
+          console.log('Creating private context for signatures...');
+          const contextResult = await (app as any).createContext(undefined, {
+            is_private: true,
+            context_name: 'Signatures Private Context',
+          });
+          
+          if (contextResult && contextResult.contextId) {
+            signatureContextId = contextResult.contextId as string;
+            const signatureContextUserID = contextResult.memberPublicKey as string;
+            localStorage.setItem('signatureContextId', signatureContextId);
+            localStorage.setItem('signatureContextUserID', signatureContextUserID);
+            console.log('Created signature context:', signatureContextId, 'with user ID:', signatureContextUserID);
+          }
+        } catch (error) {
+          console.error('Failed to create signature context:', error);
+        }
+      }
+
       const newSignatureName = `Signature ${signatures.length + 1}`;
-      await api.createSignature(newSignatureName, blobId, size);
+      if (!signatureContextId) {
+        throw new Error('Failed to create or retrieve signature context');
+      }
+
+      const signatureContextUserID = localStorage.getItem('signatureContextUserID');
+      
+      await api.createSignature(
+        newSignatureName, 
+        blobId, 
+        size,
+        signatureContextId,
+        agreementContextID || undefined,
+        agreementContextUserID || undefined,
+        agreementContextUserID || undefined, // Use agreement context user ID as executor public key
+      );
 
       await fetchSignatures();
     } catch (error) {
@@ -145,7 +275,25 @@ export default function SignaturesPage() {
   const confirmDeleteSignature = async () => {
     if (deleteSignatureId) {
       try {
-        await api.deleteSignature(Number(deleteSignatureId));
+        // For signatures, we need to use a private context
+        const signatureContextId = localStorage.getItem('signatureContextId');
+        const agreementContextID = localStorage.getItem('agreementContextID');
+        const agreementContextUserID = localStorage.getItem('agreementContextUserID');
+
+        if (!signatureContextId) {
+          console.error('No signature context found');
+          return;
+        }
+
+        const signatureContextUserID = localStorage.getItem('signatureContextUserID');
+        
+        await api.deleteSignature(
+          Number(deleteSignatureId),
+          signatureContextId,
+          agreementContextID || undefined,
+          agreementContextUserID || undefined,
+          agreementContextUserID || undefined, // Use agreement context user ID as executor public key
+        );
         await fetchSignatures();
       } catch (error) {
         console.error('Failed to delete signature:', error);
