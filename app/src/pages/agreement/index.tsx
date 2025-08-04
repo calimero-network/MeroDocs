@@ -6,7 +6,7 @@ import React, {
   useMemo,
 } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useCalimero } from '@calimero-network/calimero-client';
+import { blobClient, useCalimero } from '@calimero-network/calimero-client';
 import {
   ArrowLeft,
   Plus,
@@ -14,7 +14,6 @@ import {
   Users,
   Upload,
   FileText,
-  Eye,
   X,
   Trash2,
   Download,
@@ -28,9 +27,7 @@ import { MobileLayout } from '../../components/MobileLayout';
 import PDFViewer from '../../components/PDFViewer';
 import { useTheme } from '../../contexts/ThemeContext';
 import { DocumentService } from '../../api/documentService';
-import {
-  ClientApiDataSource,
-} from '../../api/dataSource/ClientApiDataSource';
+import { ClientApiDataSource } from '../../api/dataSource/ClientApiDataSource';
 import { ContextApiDataSource } from '../../api/dataSource/nodeApiDataSource';
 import { ContextDetails, PermissionLevel } from '../../api/clientApi';
 import { useIcpAuth } from '../../contexts/IcpAuthContext';
@@ -355,41 +352,31 @@ const AgreementPage: React.FC = () => {
       ]);
 
       try {
-        const result = await (app as any).uploadBlob(
-          file,
-          (progress: number) => {
-            setUploadFiles((prev) => prev.map((f) => ({ ...f, progress })));
-          }
-        );
-
-        console.log('uploadBlob result:', result);
+        const result = await blobClient.uploadBlob(file, (progress: number) => {
+          setUploadFiles((prev) =>
+            prev.map((f) =>
+              f.file && f.file.name === file.name ? { ...f, progress } : f,
+            ),
+          );
+        });
 
         if (result.error) {
           setUploadFiles((prev) =>
-            prev.map((f) => ({
-              ...f,
-              uploading: false,
-              error: result.error.message,
-            })),
+            prev.map((f) =>
+              f.file && f.file.name === file.name
+                ? { ...f, uploading: false, error: result.error.message }
+                : f,
+            ),
           );
           setUploading(false);
           setError(result.error.message);
           console.error(`Failed to upload ${file.name}:`, result.error);
           return;
         }
-
-        // Handle different possible return formats
         let blobId: string | undefined;
-        
-        if (result.data && result.data.blobId) {
-          // Expected format: { data: { blobId: string } }
+
+        if (result && result.data && typeof result.data.blobId === 'string') {
           blobId = result.data.blobId;
-        } else if (result.blobId) {
-          // Alternative format: { blobId: string }
-          blobId = result.blobId;
-        } else if (typeof result === 'string') {
-          // Direct string format: "blobId"
-          blobId = result;
         }
 
         if (!blobId) {
@@ -439,7 +426,10 @@ const AgreementPage: React.FC = () => {
               safeDocumentId,
               hash,
             );
-            console.log('ICP canister recordOriginalHash response:', icpResponse);
+            console.log(
+              'ICP canister recordOriginalHash response:',
+              icpResponse,
+            );
             console.log('Original hash uploaded to ICP canister');
           } catch (icpError) {
             console.error(
@@ -450,12 +440,17 @@ const AgreementPage: React.FC = () => {
         }
 
         setUploadFiles((prev) =>
-          prev.map((f) => ({
-            ...f,
-            uploading: false,
-            uploaded: true,
-            progress: 100,
-          })),
+          prev.map((f) =>
+            f.file && f.file.name === file.name
+              ? {
+                  ...f,
+                  uploading: false,
+                  uploaded: true,
+                  progress: 100,
+                  blob_id: blobId,
+                }
+              : f,
+          ),
         );
         setUploading(false);
         setError(null);
@@ -546,7 +541,7 @@ const AgreementPage: React.FC = () => {
       try {
         setLoadingPDFPreview(true);
 
-        const blob = await (app as any).downloadBlob(document.pdfBlobId);
+        const blob = await blobClient.downloadBlob(document.pdfBlobId);
 
         const file = new File([blob], document.name, {
           type: 'application/pdf',
@@ -593,7 +588,8 @@ const AgreementPage: React.FC = () => {
       }
 
       try {
-        const blob = await (app as any).downloadBlob(doc.pdfBlobId);
+        const blob = await blobClient.downloadBlob(doc.pdfBlobId);
+
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
@@ -684,7 +680,7 @@ const AgreementPage: React.FC = () => {
       setVerifyResult(null);
       try {
         const result = await documentService.verifyDocumentWithICP(
-          doc.id, // <-- send the document id here
+          doc.id,
           doc.hash || '',
           identity,
         );
@@ -705,7 +701,10 @@ const AgreementPage: React.FC = () => {
     try {
       (app as any).connect();
     } catch (error) {
-      console.warn('WebSocket connection failed, continuing without real-time updates:', error);
+      console.warn(
+        'WebSocket connection failed, continuing without real-time updates:',
+        error,
+      );
     }
 
     // Add event handler
@@ -718,7 +717,7 @@ const AgreementPage: React.FC = () => {
         console.error('Error handling state mutation event:', err);
       }
     };
-    
+
     try {
       (app as any).addCallback(handleEvent);
     } catch (error) {
@@ -727,7 +726,9 @@ const AgreementPage: React.FC = () => {
 
     // Subscribe to context
     try {
-      (app as any).subscribe([{ contextId: currentContextId, executorId: '', applicationId: '' }]);
+      (app as any).subscribe([
+        { contextId: currentContextId, executorId: '', applicationId: '' },
+      ]);
     } catch (error) {
       console.warn('Failed to subscribe to context:', error);
     }

@@ -128,7 +128,7 @@ export default function Dashboard() {
   ];
 
   console.log('Dashboard: agreements array:', agreements);
-  
+
   const filteredContexts = agreements.filter((agreement) => {
     console.log('Dashboard: filtering agreement:', agreement);
     if (!agreement.name) {
@@ -140,7 +140,7 @@ export default function Dashboard() {
       .includes(searchQuery.toLowerCase());
     return matchesSearch;
   });
-  
+
   console.log('Dashboard: filteredContexts:', filteredContexts);
 
   const containerVariants = {
@@ -227,14 +227,14 @@ export default function Dashboard() {
         setJoining(false);
         return;
       }
-      
+
       const { contextId, memberPublicKey } = joinResponse.data;
       if (!contextId || !memberPublicKey) {
         setError('Invalid join context response data');
         setJoining(false);
         return;
       }
-      
+
       localStorage.setItem('agreementContextID', contextId);
       localStorage.setItem('agreementContextUserID', memberPublicKey);
 
