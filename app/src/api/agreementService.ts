@@ -33,7 +33,7 @@ export class AgreementService {
 
       const joinResponse = await this.clientApi.joinSharedContext(
         contextData.contextId,
-        contextData.memberPublicKey,
+        contextData.executorId,
         name,
       );
 
@@ -45,11 +45,11 @@ export class AgreementService {
         id: contextData.contextId,
         name,
         contextId: contextData.contextId,
-        memberPublicKey: contextData.memberPublicKey,
+        memberPublicKey: contextData.executorId,
         role: 'Owner',
         joinedAt: Date.now(),
-        privateIdentity: contextData.memberPublicKey,
-        sharedIdentity: contextData.memberPublicKey,
+        privateIdentity: contextData.executorId,
+        sharedIdentity: contextData.executorId,
       };
 
       return {
@@ -90,16 +90,20 @@ export class AgreementService {
         };
       }
 
-      const contexts = contextsResponse.data as ContextMetadata[];
+      let contextsArray: any[] = [];
+      const responseData = contextsResponse.data;
 
-      console.log('AgreementService: contextsResponse.data:', contextsResponse.data);
-      console.log('AgreementService: contexts:', contexts);
-
-      if (!contexts || !Array.isArray(contexts)) {
+      if (Array.isArray(responseData)) {
+        contextsArray = responseData;
+      } else if (responseData && Array.isArray(responseData.output)) {
+        contextsArray = responseData.output;
+      } else if (responseData && Array.isArray(responseData.result)) {
+        contextsArray = responseData.result;
+      } else {
         console.error(
           'AgreementService: Invalid contexts data, expected array but got:',
-          typeof contexts,
-          contexts,
+          typeof responseData,
+          responseData,
         );
         return {
           data: [],
@@ -107,24 +111,22 @@ export class AgreementService {
         };
       }
 
-      // Convert contexts to agreements
-      const agreements: Agreement[] = contexts.map((context: any) => {
-        console.log('AgreementService: processing context:', context);
-        
-        // Handle new API structure
+      const agreements: Agreement[] = contextsArray.map((context: any) => {
         if (context.contextId) {
           return {
             id: context.contextId,
-            name: `Agreement ${context.contextId.slice(0, 8)}...`, // Generate a name since it's not provided
+            name:
+              context.context_name ||
+              `Agreement ${context.contextId.slice(0, 8)}...`,
             contextId: context.contextId,
             memberPublicKey: context.executorId,
-            role: 'Owner', // Default role
-            joinedAt: Date.now(), // Default timestamp
+            role: context.role || ' ',
+            joinedAt: context.joinedAt || ' ',
             privateIdentity: context.executorId,
             sharedIdentity: context.executorId,
           };
         }
-        
+
         // Handle old API structure (fallback)
         return {
           id: context.context_id,
