@@ -13,6 +13,7 @@ import {
   PermissionLevel,
   UserId,
 } from '../clientApi';
+import { DefaultContextService } from '../defaultContextService';
 
 const RequestConfig = { timeout: 30000 };
 
@@ -71,6 +72,7 @@ export class ClientApiDataSource implements ClientApi {
               agreementContextUserID,
             )
           : getAuthConfig();
+
       const response = await rpcClient.execute({
         ...authConfig,
         method: ClientMethod.ADD_PARTICIPANT,
@@ -98,9 +100,73 @@ export class ClientApiDataSource implements ClientApi {
     } catch (error: any) {
       console.error('ClientApiDataSource: Error in addParticipant:', error);
       return {
-        data: null,
+        data: undefined,
         error: {
-          code: error.code || 500,
+          code: 500,
+          message: getErrorMessage(error),
+        },
+      };
+    }
+  }
+
+  async isDefaultPrivateContext(): ApiResponse<boolean> {
+    try {
+      if (this.app) {
+        const defaultContextService = new DefaultContextService(this.app);
+        const defaultContext = defaultContextService.getStoredDefaultContext();
+
+        if (!defaultContext) {
+          throw new Error(
+            'Default context not found. Please ensure you are connected to Calimero and have a default context initialized.',
+          );
+        }
+
+        const result = await this.app.execute(
+          defaultContext,
+          ClientMethod.IS_DEFAULT_PRIVATE_CONTEXT,
+          {},
+        );
+
+        return {
+          data: result.data || result,
+          error: null,
+        };
+      } else {
+        // Fallback to old API
+        const authConfig = getAuthConfig();
+
+        const response = await rpcClient.execute({
+          ...authConfig,
+          method: ClientMethod.IS_DEFAULT_PRIVATE_CONTEXT,
+          argsJson: {},
+        } as RpcQueryParams<any>);
+
+        if (response?.error) {
+          return {
+            data: undefined,
+            error: {
+              code: response.error.code ?? 500,
+              message: getErrorMessage(response.error),
+            },
+          };
+        }
+
+        const data = response.result?.output || response.result;
+
+        return {
+          data: data as boolean,
+          error: null,
+        };
+      }
+    } catch (error: any) {
+      console.error(
+        'ClientApiDataSource: Error in isDefaultPrivateContext:',
+        error,
+      );
+      return {
+        data: undefined,
+        error: {
+          code: 500,
           message: getErrorMessage(error),
         },
       };
@@ -269,43 +335,71 @@ export class ClientApiDataSource implements ClientApi {
     signatureContextUserID?: string,
   ): Promise<any> {
     try {
-      // For signatures, we need to use the signature context as the main context
-      // If contextId is provided (signature context), use it as the main context
-      let authConfig;
-      if (contextId) {
-        // Use the signature context as the main context
-        const baseAuthConfig = getAuthConfig();
-        authConfig = {
-          ...baseAuthConfig,
-          contextId: contextId,
-          executorPublicKey: signatureContextUserID || baseAuthConfig.executorPublicKey,
+      if (this.app) {
+        const defaultContextService = new DefaultContextService(this.app);
+        const defaultContext = defaultContextService.getStoredDefaultContext();
+
+        if (!defaultContext) {
+          throw new Error(
+            'Default context not found. Please ensure you are connected to Calimero and have a default context initialized.',
+          );
+        }
+
+        const params = {
+          name,
+          blob_id_str: blobIdStr,
+          data_size: dataSize,
+        };
+
+        const result = await this.app.execute(
+          defaultContext,
+          ClientMethod.CREATE_SIGNATURE,
+          params,
+        );
+
+        return {
+          data: result.data || result,
         };
       } else {
-        // Fallback to agreement context if no signature context
-        authConfig =
-          agreementContextID && agreementContextUserID
-            ? getContextSpecificAuthConfig(
-                agreementContextID,
-                agreementContextUserID,
-              )
-            : getAuthConfig();
+        // Fallback to old API
+
+        let authConfig;
+        if (contextId) {
+          // Use the signature context as the main context
+          const baseAuthConfig = getAuthConfig();
+          authConfig = {
+            ...baseAuthConfig,
+            contextId: contextId,
+            executorPublicKey:
+              signatureContextUserID || baseAuthConfig.executorPublicKey,
+          };
+        } else {
+          authConfig =
+            agreementContextID && agreementContextUserID
+              ? getContextSpecificAuthConfig(
+                  agreementContextID,
+                  agreementContextUserID,
+                )
+              : getAuthConfig();
+        }
+
+        const argsJson: any = {
+          name,
+          blob_id_str: blobIdStr,
+          data_size: dataSize,
+        };
+
+        const response = await rpcClient.execute({
+          ...authConfig,
+          method: ClientMethod.CREATE_SIGNATURE,
+          argsJson,
+        } as RpcQueryParams<any>);
+        return {
+          data: response.result,
+        };
       }
-
-      const argsJson: any = {
-        name,
-        blob_id_str: blobIdStr,
-        data_size: dataSize,
-      };
-
-      const response = await rpcClient.execute({
-        ...authConfig,
-        method: ClientMethod.CREATE_SIGNATURE,
-        argsJson,
-      } as RpcQueryParams<any>);
-      return {
-        data: response.result,
-      };
     } catch (error: any) {
+      console.error('ClientApiDataSource: Error in createSignature:', error);
       return {
         error: error,
       };
@@ -320,41 +414,65 @@ export class ClientApiDataSource implements ClientApi {
     signatureContextUserID?: string,
   ): Promise<any> {
     try {
-      // For signatures, we need to use the signature context as the main context
-      // If contextId is provided (signature context), use it as the main context
-      let authConfig;
-      if (contextId) {
-        // Use the signature context as the main context
-        const baseAuthConfig = getAuthConfig();
-        authConfig = {
-          ...baseAuthConfig,
-          contextId: contextId,
-          executorPublicKey: signatureContextUserID || baseAuthConfig.executorPublicKey,
+      if (this.app) {
+        const defaultContextService = new DefaultContextService(this.app);
+        const defaultContext = defaultContextService.getStoredDefaultContext();
+
+        if (!defaultContext) {
+          throw new Error(
+            'Default context not found. Please ensure you are connected to Calimero and have a default context initialized.',
+          );
+        }
+
+        const params = {
+          signature_id: signatureId,
+        };
+
+        const result = await this.app.execute(
+          defaultContext,
+          ClientMethod.DELETE_SIGNATURE,
+          params,
+        );
+
+        return {
+          data: result.data || result,
         };
       } else {
-        // Fallback to agreement context if no signature context
-        authConfig =
-          agreementContextID && agreementContextUserID
-            ? getContextSpecificAuthConfig(
-                agreementContextID,
-                agreementContextUserID,
-              )
-            : getAuthConfig();
+        // Fallback to old API
+        let authConfig;
+        if (contextId) {
+          const baseAuthConfig = getAuthConfig();
+          authConfig = {
+            ...baseAuthConfig,
+            contextId: contextId,
+            executorPublicKey:
+              signatureContextUserID || baseAuthConfig.executorPublicKey,
+          };
+        } else {
+          authConfig =
+            agreementContextID && agreementContextUserID
+              ? getContextSpecificAuthConfig(
+                  agreementContextID,
+                  agreementContextUserID,
+                )
+              : getAuthConfig();
+        }
+
+        const argsJson: any = {
+          signature_id: signatureId,
+        };
+
+        const response = await rpcClient.execute({
+          ...authConfig,
+          method: ClientMethod.DELETE_SIGNATURE,
+          argsJson,
+        } as RpcQueryParams<any>);
+        return {
+          data: response.result,
+        };
       }
-
-      const argsJson: any = {
-        signature_id: signatureId,
-      };
-
-      const response = await rpcClient.execute({
-        ...authConfig,
-        method: ClientMethod.DELETE_SIGNATURE,
-        argsJson,
-      } as RpcQueryParams<any>);
-      return {
-        data: response.result,
-      };
     } catch (error: any) {
+      console.error('ClientApiDataSource: Error in deleteSignature:', error);
       return {
         error: error,
       };
@@ -368,53 +486,87 @@ export class ClientApiDataSource implements ClientApi {
     signatureContextUserID?: string,
   ): Promise<any> {
     try {
-      // For signatures, we need to use the signature context as the main context
-      // If contextId is provided (signature context), use it as the main context
-      let authConfig;
-      if (contextId) {
-        // Use the signature context as the main context
-        const baseAuthConfig = getAuthConfig();
-        authConfig = {
-          ...baseAuthConfig,
-          contextId: contextId,
-          executorPublicKey: signatureContextUserID || baseAuthConfig.executorPublicKey,
+      if (this.app) {
+        const defaultContextService = new DefaultContextService(this.app);
+        const defaultContext = defaultContextService.getStoredDefaultContext();
+
+        if (!defaultContext) {
+          throw new Error(
+            'Default context not found. Please ensure you are connected to Calimero and have a default context initialized.',
+          );
+        }
+
+        const result = await this.app.execute(
+          defaultContext,
+          ClientMethod.LIST_SIGNATURES,
+          {},
+        );
+
+        const extractedData = result.data || result;
+
+        if (
+          Array.isArray(extractedData) &&
+          extractedData.length > 0 &&
+          typeof extractedData[0] === 'number'
+        ) {
+          return {
+            data: {
+              output: extractedData,
+              isPngData: true,
+            },
+          };
+        }
+
+        return {
+          data: extractedData,
         };
       } else {
-        // Fallback to agreement context if no signature context
-        authConfig =
-          agreementContextID && agreementContextUserID
-            ? getContextSpecificAuthConfig(
-                agreementContextID,
-                agreementContextUserID,
-              )
-            : getAuthConfig();
-      }
+        // Fallback to old API
 
-      console.log('About to execute rpcClient with authConfig:', authConfig);
-      const response = await rpcClient.execute({
-        ...authConfig,
-        method: ClientMethod.LIST_SIGNATURES,
-        argsJson: {}, // No need for context_id in argsJson since it's in the main contextId
-      } as RpcQueryParams<any>);
+        let authConfig;
+        if (contextId) {
+          const baseAuthConfig = getAuthConfig();
+          authConfig = {
+            ...baseAuthConfig,
+            contextId: contextId,
+            executorPublicKey:
+              signatureContextUserID || baseAuthConfig.executorPublicKey,
+          };
+        } else {
+          authConfig =
+            agreementContextID && agreementContextUserID
+              ? getContextSpecificAuthConfig(
+                  agreementContextID,
+                  agreementContextUserID,
+                )
+              : getAuthConfig();
+        }
 
-      const extractedData = response.result?.output || response.result;
+        const response = await rpcClient.execute({
+          ...authConfig,
+          method: ClientMethod.LIST_SIGNATURES,
+          argsJson: {},
+        } as RpcQueryParams<any>);
 
-      if (
-        Array.isArray(extractedData) &&
-        extractedData.length > 0 &&
-        typeof extractedData[0] === 'number'
-      ) {
+        const extractedData = response.result?.output || response.result;
+
+        if (
+          Array.isArray(extractedData) &&
+          extractedData.length > 0 &&
+          typeof extractedData[0] === 'number'
+        ) {
+          return {
+            data: {
+              output: extractedData,
+              isPngData: true,
+            },
+          };
+        }
+
         return {
-          data: {
-            output: extractedData,
-            isPngData: true,
-          },
+          data: extractedData,
         };
       }
-
-      return {
-        data: extractedData,
-      };
     } catch (error: any) {
       console.error('ClientApiDataSource: Error in listSignatures:', error);
       return {
@@ -432,20 +584,55 @@ export class ClientApiDataSource implements ClientApi {
     name: string,
   ): Promise<any> {
     try {
-      const argsJson: any = {
-        context_id: contextId,
-        shared_identity: sharedIdentity,
-        context_name: name,
-      };
-      const response = await rpcClient.execute({
-        ...getAuthConfig(),
-        method: ClientMethod.JOIN_SHARED_CONTEXT,
-        argsJson,
-      } as RpcQueryParams<any>);
-      return {
-        data: response.result,
-      };
+      if (!sharedIdentity) {
+        throw new Error(
+          'sharedIdentity parameter is required but was not provided',
+        );
+      }
+
+      if (this.app) {
+        const defaultContextService = new DefaultContextService(this.app);
+        const defaultContext = defaultContextService.getStoredDefaultContext();
+
+        if (!defaultContext) {
+          throw new Error(
+            'Default context not found. Please ensure you are connected to Calimero and have a default context initialized.',
+          );
+        }
+
+        const params = {
+          context_id: contextId,
+          shared_identity: sharedIdentity,
+          context_name: name,
+        };
+
+        const result = await this.app.execute(
+          defaultContext,
+          ClientMethod.JOIN_SHARED_CONTEXT,
+          params,
+        );
+
+        return {
+          data: result.data || result,
+        };
+      } else {
+        // Fallback to old API
+        const argsJson: any = {
+          context_id: contextId,
+          shared_identity: sharedIdentity,
+          context_name: name,
+        };
+        const response = await rpcClient.execute({
+          ...getAuthConfig(),
+          method: ClientMethod.JOIN_SHARED_CONTEXT,
+          argsJson,
+        } as RpcQueryParams<any>);
+        return {
+          data: response.result,
+        };
+      }
     } catch (error: any) {
+      console.error('ClientApiDataSource: Error in joinSharedContext:', error);
       return {
         error: error,
       };
@@ -454,31 +641,38 @@ export class ClientApiDataSource implements ClientApi {
 
   async listJoinedContexts(): Promise<any> {
     try {
-      console.log('listJoinedContexts: Starting...');
-      
       if (this.app) {
-        // Use the new API
-        console.log('listJoinedContexts: Using new API');
-        const result = await this.app.fetchContexts();
-        console.log('listJoinedContexts: new API result:', result);
+        // Get default context using the service
+        const defaultContextService = new DefaultContextService(this.app);
+        const defaultContext = defaultContextService.getStoredDefaultContext();
+
+        if (!defaultContext) {
+          throw new Error(
+            'Default context not found. Please ensure you are connected to Calimero and have a default context initialized.',
+          );
+        }
+
+        const result = await this.app.execute(
+          defaultContext,
+          ClientMethod.LIST_JOINED_CONTEXTS,
+          {},
+        );
+
         return {
           data: result.data || result,
         };
       } else {
         // Fallback to old API
-        console.log('listJoinedContexts: Using old API');
+
         const authConfig = getAuthConfig();
-        console.log('listJoinedContexts: authConfig:', authConfig);
-        
+
         const response = await rpcClient.execute({
           ...authConfig,
           method: ClientMethod.LIST_JOINED_CONTEXTS,
           argsJson: {},
         } as RpcQueryParams<any>);
 
-        console.log('listJoinedContexts: response:', response);
         const data = response.result?.output || response.result;
-        console.log('listJoinedContexts: data:', data);
 
         return {
           data: data,
