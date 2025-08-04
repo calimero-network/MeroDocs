@@ -32,9 +32,9 @@ export class ContextApiDataSource implements NodeApi {
         is_private: props.is_private,
         context_name: props.context_name,
       };
-      
+
       console.log('createContext initParams:', initParams);
-      
+
       // Use the new API with correct parameter order:
       // createContext(protocol, initParams)
       const result = await this.app.createContext(undefined, initParams);
@@ -59,7 +59,9 @@ export class ContextApiDataSource implements NodeApi {
     }
   }
 
-  async inviteToContext(props: InviteToContextProps): Promise<{ data?: string; error?: any }> {
+  async inviteToContext(
+    props: InviteToContextProps,
+  ): Promise<{ data?: string; error?: any }> {
     try {
       if (!this.app) {
         throw new Error('App not initialized');
@@ -92,7 +94,9 @@ export class ContextApiDataSource implements NodeApi {
     }
   }
 
-  async joinContext(props: JoinContextProps): Promise<{ data?: JoinContextResponse; error?: any }> {
+  async joinContext(
+    props: JoinContextProps,
+  ): Promise<{ data?: JoinContextResponse; error?: any }> {
     try {
       if (!this.app) {
         throw new Error('App not initialized');
