@@ -268,6 +268,10 @@ impl MeroDocsState {
         state
     }
 
+    pub fn is_default_private_context(&self) -> bool {
+        self.is_private && self.context_name == "default"
+    }
+
     /// Create a new signature and store its PNG data
     pub fn create_signature(
         &mut self,
