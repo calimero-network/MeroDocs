@@ -4,5 +4,8 @@
 	},
 	"devDependencies": {
 		"husky": "^9.0.11"
+	},
+	"dependencies": {
+		"pdf-lib": "^1.17.1"
 	}
 }
