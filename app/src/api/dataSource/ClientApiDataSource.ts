@@ -112,7 +112,9 @@ export class ClientApiDataSource implements ClientApi {
   async isDefaultPrivateContext(): ApiResponse<boolean> {
     try {
       if (this.app) {
-        const defaultContextService = new DefaultContextService(this.app);
+        const defaultContextService = DefaultContextService.getInstance(
+          this.app,
+        );
         const defaultContext = defaultContextService.getStoredDefaultContext();
 
         if (!defaultContext) {
@@ -336,7 +338,9 @@ export class ClientApiDataSource implements ClientApi {
   ): Promise<any> {
     try {
       if (this.app) {
-        const defaultContextService = new DefaultContextService(this.app);
+        const defaultContextService = DefaultContextService.getInstance(
+          this.app,
+        );
         const defaultContext = defaultContextService.getStoredDefaultContext();
 
         if (!defaultContext) {
@@ -415,7 +419,9 @@ export class ClientApiDataSource implements ClientApi {
   ): Promise<any> {
     try {
       if (this.app) {
-        const defaultContextService = new DefaultContextService(this.app);
+        const defaultContextService = DefaultContextService.getInstance(
+          this.app,
+        );
         const defaultContext = defaultContextService.getStoredDefaultContext();
 
         if (!defaultContext) {
@@ -487,7 +493,9 @@ export class ClientApiDataSource implements ClientApi {
   ): Promise<any> {
     try {
       if (this.app) {
-        const defaultContextService = new DefaultContextService(this.app);
+        const defaultContextService = DefaultContextService.getInstance(
+          this.app,
+        );
         const defaultContext = defaultContextService.getStoredDefaultContext();
 
         if (!defaultContext) {
@@ -591,7 +599,9 @@ export class ClientApiDataSource implements ClientApi {
       }
 
       if (this.app) {
-        const defaultContextService = new DefaultContextService(this.app);
+        const defaultContextService = DefaultContextService.getInstance(
+          this.app,
+        );
         const defaultContext = defaultContextService.getStoredDefaultContext();
 
         if (!defaultContext) {
@@ -643,13 +653,25 @@ export class ClientApiDataSource implements ClientApi {
     try {
       if (this.app) {
         // Get default context using the service
-        const defaultContextService = new DefaultContextService(this.app);
-        const defaultContext = defaultContextService.getStoredDefaultContext();
-
+        const defaultContextService = DefaultContextService.getInstance(
+          this.app,
+        );
+        
+        // Try to get stored context first
+        let defaultContext = defaultContextService.getStoredDefaultContext();
+        
+        // If no stored context, ensure one exists
         if (!defaultContext) {
-          throw new Error(
-            'Default context not found. Please ensure you are connected to Calimero and have a default context initialized.',
-          );
+          console.log('[listJoinedContexts] No stored context, ensuring default context...');
+          const ensureResult = await defaultContextService.ensureDefaultContext();
+          
+          if (!ensureResult.success || !ensureResult.contextInfo) {
+            throw new Error(
+              'Failed to ensure default context: ' + (ensureResult.error || 'Unknown error'),
+            );
+          }
+          
+          defaultContext = ensureResult.contextInfo;
         }
 
         const result = await this.app.execute(

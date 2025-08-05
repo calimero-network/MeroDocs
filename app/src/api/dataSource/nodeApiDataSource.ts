@@ -25,15 +25,11 @@ export class ContextApiDataSource implements NodeApi {
         throw new Error('App not initialized');
       }
 
-      // Prepare the initialization parameters for the new API
-
       // Prepare the initialization parameters
       const initParams = {
         is_private: props.is_private,
         context_name: props.context_name,
       };
-
-      console.log('createContext initParams:', initParams);
 
       // Use the new API with correct parameter order:
       // createContext(protocol, initParams)
@@ -44,7 +40,6 @@ export class ContextApiDataSource implements NodeApi {
         error: null,
       };
     } catch (error) {
-      console.error('createContext failed:', error);
       let errorMessage = 'An unexpected error occurred during createContext';
       if (error instanceof Error) {
         errorMessage = error.message;

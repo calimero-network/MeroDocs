@@ -12,14 +12,25 @@ export const useDefaultContext = () => {
     useState<DefaultContextInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [defaultContextService, setDefaultContextService] =
+    useState<DefaultContextService | null>(null);
+
+  useEffect(() => {
+    if (app) {
+      setDefaultContextService(DefaultContextService.getInstance(app));
+    } else {
+      DefaultContextService.clearInstance();
+      setDefaultContextService(null);
+    }
+  }, [app]);
+
   const ensureDefaultContext = useCallback(async () => {
-    if (!app) return;
+    if (!app || !defaultContextService) return;
 
     try {
       setIsCreating(true);
       setError(null);
 
-      const defaultContextService = new DefaultContextService(app);
       const result = await defaultContextService.ensureDefaultContext();
 
       if (result.success && result.contextInfo) {
@@ -38,9 +49,8 @@ export const useDefaultContext = () => {
     } finally {
       setIsCreating(false);
     }
-  }, [app]);
+  }, [app, defaultContextService]);
 
-  // Auto-run when app becomes available
   useEffect(() => {
     if (app) {
       const timer = setTimeout(ensureDefaultContext, 1000);
@@ -62,8 +72,9 @@ export const useDefaultContext = () => {
     error,
     ensureDefaultContext,
     clearContext: () => {
-      const service = new DefaultContextService(app);
-      service.clearStoredDefaultContext();
+      if (defaultContextService) {
+        defaultContextService.clearStoredDefaultContext();
+      }
       setDefaultContextInfo(null);
       setError(null);
     },

@@ -10,12 +10,30 @@ export interface DefaultContextInfo {
 }
 
 export class DefaultContextService {
+  private static instance: DefaultContextService | null = null;
+  private static globalCreatingFlag: boolean = false;
   private app: any;
   private nodeApiService: ContextApiDataSource;
+  private isCreatingContext: boolean = false;
 
-  constructor(app: any) {
+  private constructor(app: any) {
     this.app = app;
     this.nodeApiService = new ContextApiDataSource(app);
+  }
+
+  static getInstance(app: any): DefaultContextService {
+    if (
+      !DefaultContextService.instance ||
+      DefaultContextService.instance.app !== app
+    ) {
+      DefaultContextService.instance = new DefaultContextService(app);
+    }
+    return DefaultContextService.instance;
+  }
+
+  static clearInstance(): void {
+    DefaultContextService.globalCreatingFlag = false;
+    DefaultContextService.instance = null;
   }
 
   /**
@@ -112,12 +130,31 @@ export class DefaultContextService {
     error?: string;
     wasCreated?: boolean;
   }> {
+    if (DefaultContextService.globalCreatingFlag) {
+      console.log(
+        '[ensureDefaultContext] Global creation in progress, waiting...',
+      );
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      return this.ensureDefaultContext();
+    }
+
+    if (this.isCreatingContext) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      return this.ensureDefaultContext();
+    }
+
     if (!this.app) {
       return { success: false, error: 'App not initialized' };
     }
 
     try {
+      if (this.isCreatingContext) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        return this.ensureDefaultContext();
+      }
+
       const storedContext = this.getStoredDefaultContext();
+
       if (storedContext) {
         const isStillValidDefault =
           await this.isDefaultPrivateContextViaApi(storedContext);
@@ -133,6 +170,11 @@ export class DefaultContextService {
           );
           this.clearStoredDefaultContext();
         }
+      }
+
+      if (!storedContext && !DefaultContextService.globalCreatingFlag) {
+        DefaultContextService.globalCreatingFlag = true;
+        this.isCreatingContext = true;
       }
 
       const contexts = await this.app.fetchContexts();
@@ -153,34 +195,51 @@ export class DefaultContextService {
         if (isDefaultPrivate) {
           this.storeDefaultContext(contextInfo);
 
+          if (DefaultContextService.globalCreatingFlag) {
+            DefaultContextService.globalCreatingFlag = false;
+            this.isCreatingContext = false;
+          }
+
           return { success: true, contextInfo, wasCreated: false };
         }
       }
 
-      const createResult = await this.createDefaultContext();
-
-      if (!createResult.success) {
-        return { success: false, error: createResult.error };
+      if (!DefaultContextService.globalCreatingFlag) {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        return this.ensureDefaultContext();
       }
 
-      const contextInfo: DefaultContextInfo = {
-        contextId: createResult.data.contextId,
-        memberPublicKey: createResult.data.memberPublicKey,
-        executorId:
-          createResult.data.executorId || createResult.data.memberPublicKey,
-        applicationId: createResult.data.applicationId,
-        context_name: 'default',
-        is_private: true,
-      };
+      try {
+        const createResult = await this.createDefaultContext();
 
-      this.storeDefaultContext(contextInfo);
+        if (!createResult.success) {
+          return { success: false, error: createResult.error };
+        }
 
-      return {
-        success: true,
-        contextInfo,
-        wasCreated: true,
-      };
+        const contextInfo: DefaultContextInfo = {
+          contextId: createResult.data.contextId,
+          memberPublicKey:
+            createResult.data.memberPublicKey || createResult.data.executorId,
+          executorId: createResult.data.executorId,
+          applicationId: createResult.data.applicationId,
+          context_name: 'default',
+          is_private: true,
+        };
+
+        this.storeDefaultContext(contextInfo);
+
+        return {
+          success: true,
+          contextInfo,
+          wasCreated: true,
+        };
+      } finally {
+        DefaultContextService.globalCreatingFlag = false;
+        this.isCreatingContext = false;
+      }
     } catch (error: any) {
+      DefaultContextService.globalCreatingFlag = false;
+      this.isCreatingContext = false;
       console.error('Error ensuring default context:', error);
       return { success: false, error: error.message || 'Unknown error' };
     }
