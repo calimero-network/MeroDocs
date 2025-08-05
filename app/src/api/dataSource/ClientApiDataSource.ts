@@ -656,21 +656,22 @@ export class ClientApiDataSource implements ClientApi {
         const defaultContextService = DefaultContextService.getInstance(
           this.app,
         );
-        
+
         // Try to get stored context first
         let defaultContext = defaultContextService.getStoredDefaultContext();
-        
+
         // If no stored context, ensure one exists
         if (!defaultContext) {
-          console.log('[listJoinedContexts] No stored context, ensuring default context...');
-          const ensureResult = await defaultContextService.ensureDefaultContext();
-          
+          const ensureResult =
+            await defaultContextService.ensureDefaultContext();
+
           if (!ensureResult.success || !ensureResult.contextInfo) {
             throw new Error(
-              'Failed to ensure default context: ' + (ensureResult.error || 'Unknown error'),
+              'Failed to ensure default context: ' +
+                (ensureResult.error || 'Unknown error'),
             );
           }
-          
+
           defaultContext = ensureResult.contextInfo;
         }
 

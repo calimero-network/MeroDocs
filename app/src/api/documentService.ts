@@ -35,9 +35,7 @@ export class DocumentService {
         return { error: { message: 'Failed to get blob ID from upload' } };
       }
 
-      console.log(
-        `Upload completed for ${file.name}: ${blobResponse.data.blobId}`,
-      );
+
 
       // Calculate hash from file for verification
       const arrayBuffer = await file.arrayBuffer();

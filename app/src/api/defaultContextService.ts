@@ -131,9 +131,6 @@ export class DefaultContextService {
     wasCreated?: boolean;
   }> {
     if (DefaultContextService.globalCreatingFlag) {
-      console.log(
-        '[ensureDefaultContext] Global creation in progress, waiting...',
-      );
       await new Promise((resolve) => setTimeout(resolve, 200));
       return this.ensureDefaultContext();
     }
@@ -165,9 +162,6 @@ export class DefaultContextService {
             wasCreated: false,
           };
         } else {
-          console.log(
-            'Stored context is no longer a default private context, clearing...',
-          );
           this.clearStoredDefaultContext();
         }
       }

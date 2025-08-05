@@ -127,12 +127,8 @@ export default function Dashboard() {
     },
   ];
 
-  console.log('Dashboard: agreements array:', agreements);
-
   const filteredContexts = agreements.filter((agreement) => {
-    console.log('Dashboard: filtering agreement:', agreement);
     if (!agreement.name) {
-      console.log('Dashboard: agreement has no name, filtering out');
       return false;
     }
     const matchesSearch = agreement.name
@@ -140,8 +136,6 @@ export default function Dashboard() {
       .includes(searchQuery.toLowerCase());
     return matchesSearch;
   });
-
-  console.log('Dashboard: filteredContexts:', filteredContexts);
 
   const containerVariants = {
     hidden: { opacity: 0 },
