@@ -6,12 +6,7 @@ import React, {
   useMemo,
 } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  getAppEndpointKey,
-  getApplicationId,
-  blobClient,
-  SubscriptionsClient,
-} from '@calimero-network/calimero-client';
+import { blobClient, useCalimero } from '@calimero-network/calimero-client';
 import {
   ArrowLeft,
   Plus,
@@ -19,7 +14,6 @@ import {
   Users,
   Upload,
   FileText,
-  Eye,
   X,
   Trash2,
   Download,
@@ -33,13 +27,11 @@ import { MobileLayout } from '../../components/MobileLayout';
 import PDFViewer from '../../components/PDFViewer';
 import { useTheme } from '../../contexts/ThemeContext';
 import { DocumentService } from '../../api/documentService';
-import {
-  ClientApiDataSource,
-  getWsSubscriptionsClient,
-} from '../../api/dataSource/ClientApiDataSource';
+import { ClientApiDataSource } from '../../api/dataSource/ClientApiDataSource';
 import { ContextApiDataSource } from '../../api/dataSource/nodeApiDataSource';
 import { ContextDetails, PermissionLevel } from '../../api/clientApi';
 import { useIcpAuth } from '../../contexts/IcpAuthContext';
+import { backendService } from '../../api/icp/backendService';
 
 // Constants
 
@@ -143,14 +135,27 @@ const generateInvitePayload = async (
   }
 };
 
+// Helper functions
+const calculateFileHash = async (data: Uint8Array): Promise<string> => {
+  const buffer = new Uint8Array(data);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+};
+
+const sanitizeDocumentId = (documentId: string): string => {
+  return documentId.replace(/[^a-zA-Z0-9_-]/g, '_');
+};
+
 const AgreementPage: React.FC = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { mode } = useTheme();
   const { identity } = useIcpAuth();
+  const { app } = useCalimero();
   const documentService = useMemo(() => new DocumentService(), []);
-  const clientApiService = useMemo(() => new ClientApiDataSource(), []);
-  const nodeApiService = useMemo(() => new ContextApiDataSource(), []);
+  const clientApiService = useMemo(() => new ClientApiDataSource(app), [app]);
+  const nodeApiService = useMemo(() => new ContextApiDataSource(app), [app]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [showParticipants, setShowParticipants] = useState(false);
@@ -298,14 +303,6 @@ const AgreementPage: React.FC = () => {
   );
 
   useEffect(() => {
-    const url = getAppEndpointKey();
-    const applicationId = getApplicationId();
-
-    if (!url || !applicationId) {
-      navigate('/setup');
-      return;
-    }
-
     if (!currentContextId) {
       console.error('No context ID available');
       return;
@@ -313,12 +310,12 @@ const AgreementPage: React.FC = () => {
 
     loadContextDetails();
     loadDocuments();
-  }, [navigate, loadContextDetails, loadDocuments, currentContextId]);
+  }, [loadContextDetails, loadDocuments, currentContextId]);
 
   const handleFileUpload = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
       const files = event.target.files;
-      if (!files || !currentContextId) return;
+      if (!files || !currentContextId || !app) return;
 
       setUploading(true);
       setError(null);
@@ -354,37 +351,106 @@ const AgreementPage: React.FC = () => {
         },
       ]);
 
-      const response = await documentService.uploadDocument(
-        currentContextId,
-        file.name,
-        file,
-        agreementContextID || undefined,
-        agreementContextUserID || undefined,
-        (progress: number) => {
-          setUploadFiles((prev) => prev.map((f) => ({ ...f, progress })));
-        },
-        identity,
-      );
+      try {
+        const result = await blobClient.uploadBlob(file, (progress: number) => {
+          setUploadFiles((prev) =>
+            prev.map((f) =>
+              f.file && f.file.name === file.name ? { ...f, progress } : f,
+            ),
+          );
+        });
 
-      if (response.error) {
-        setUploadFiles((prev) =>
-          prev.map((f) => ({
-            ...f,
-            uploading: false,
-            error: response.error.message,
-          })),
+        if (result.error) {
+          setUploadFiles((prev) =>
+            prev.map((f) =>
+              f.file && f.file.name === file.name
+                ? { ...f, uploading: false, error: result.error.message }
+                : f,
+            ),
+          );
+          setUploading(false);
+          setError(result.error.message);
+          console.error(`Failed to upload ${file.name}:`, result.error);
+          return;
+        }
+        let blobId: string | undefined;
+
+        if (result && result.data && typeof result.data.blobId === 'string') {
+          blobId = result.data.blobId;
+        }
+
+        if (!blobId) {
+          const errorMsg = 'Upload succeeded but no blob ID returned';
+          console.error('uploadBlob result structure:', result);
+          setUploadFiles((prev) =>
+            prev.map((f) => ({
+              ...f,
+              uploading: false,
+              error: errorMsg,
+            })),
+          );
+          setUploading(false);
+          setError(errorMsg);
+          console.error(`Failed to upload ${file.name}:`, errorMsg);
+          return;
+        }
+
+        // Calculate hash from file for verification
+        const arrayBuffer = await file.arrayBuffer();
+        const pdfData = new Uint8Array(arrayBuffer);
+        const hash = await calculateFileHash(pdfData);
+
+        // Register the document with the backend using the blob ID
+        const response = await clientApiService.uploadDocument(
+          currentContextId,
+          file.name,
+          hash,
+          blobId,
+          file.size,
+          agreementContextID || undefined,
+          agreementContextUserID || undefined,
         );
-        setUploading(false);
-        setError(response.error.message);
-        console.error(`Failed to upload ${file.name}:`, response.error);
-      } else {
+
+        if (!response.error && response.data) {
+          try {
+            let documentId = response.data;
+            const safeDocumentId = sanitizeDocumentId(documentId);
+            if (documentId !== safeDocumentId) {
+              console.warn('Sanitized documentId for ICP:', {
+                original: documentId,
+                sanitized: safeDocumentId,
+              });
+            }
+            const icpApi = await backendService(identity);
+            const icpResponse = await icpApi.recordOriginalHash(
+              safeDocumentId,
+              hash,
+            );
+            console.log(
+              'ICP canister recordOriginalHash response:',
+              icpResponse,
+            );
+            console.log('Original hash uploaded to ICP canister');
+          } catch (icpError) {
+            console.error(
+              'Failed to upload original hash to ICP canister:',
+              icpError,
+            );
+          }
+        }
+
         setUploadFiles((prev) =>
-          prev.map((f) => ({
-            ...f,
-            uploading: false,
-            uploaded: true,
-            progress: 100,
-          })),
+          prev.map((f) =>
+            f.file && f.file.name === file.name
+              ? {
+                  ...f,
+                  uploading: false,
+                  uploaded: true,
+                  progress: 100,
+                  blob_id: blobId,
+                }
+              : f,
+          ),
         );
         setUploading(false);
         setError(null);
@@ -393,14 +459,26 @@ const AgreementPage: React.FC = () => {
         if (fileInputRef.current) fileInputRef.current.value = '';
         showNotification('Document uploaded successfully!', 'success');
         await loadDocuments();
+      } catch (error) {
+        console.error(`Upload error for ${file.name}:`, error);
+        setUploadFiles((prev) =>
+          prev.map((f) => ({
+            ...f,
+            uploading: false,
+            error: `Upload error: ${error}`,
+          })),
+        );
+        setUploading(false);
+        setError(`Upload error: ${error}`);
       }
     },
     [
-      documentService,
+      app,
       currentContextId,
       loadDocuments,
       showNotification,
       identity,
+      clientApiService,
     ],
   );
 
@@ -452,14 +530,18 @@ const AgreementPage: React.FC = () => {
         );
         return;
       }
+      if (!app) {
+        showNotification(
+          'Application not initialized. Please try again later.',
+          'error',
+        );
+        return;
+      }
 
       try {
         setLoadingPDFPreview(true);
 
-        const blob = await blobClient.downloadBlob(
-          document.pdfBlobId,
-          currentContextId || undefined,
-        );
+        const blob = await blobClient.downloadBlob(document.pdfBlobId);
 
         const file = new File([blob], document.name, {
           type: 'application/pdf',
@@ -480,7 +562,7 @@ const AgreementPage: React.FC = () => {
         setLoadingPDFPreview(false);
       }
     },
-    [currentContextId, showNotification],
+    [showNotification, app],
   );
 
   const handleClosePDFViewer = useCallback(() => {
@@ -497,12 +579,17 @@ const AgreementPage: React.FC = () => {
         );
         return;
       }
+      if (!app) {
+        showNotification(
+          'Application not initialized. Please try again later.',
+          'error',
+        );
+        return;
+      }
 
       try {
-        const blob = await blobClient.downloadBlob(
-          doc.pdfBlobId,
-          currentContextId || undefined,
-        );
+        const blob = await blobClient.downloadBlob(doc.pdfBlobId);
+
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
@@ -516,7 +603,7 @@ const AgreementPage: React.FC = () => {
         showNotification(`Failed to download "${doc.name}".`, 'error');
       }
     },
-    [currentContextId, showNotification],
+    [showNotification, app],
   );
 
   const handleGenerateInvite = useCallback(async () => {
@@ -593,7 +680,7 @@ const AgreementPage: React.FC = () => {
       setVerifyResult(null);
       try {
         const result = await documentService.verifyDocumentWithICP(
-          doc.id, // <-- send the document id here
+          doc.id,
           doc.hash || '',
           identity,
         );
@@ -608,38 +695,53 @@ const AgreementPage: React.FC = () => {
   );
 
   useEffect(() => {
-    let subscriptionsClient: SubscriptionsClient | null = null;
+    if (!currentContextId || !app) return;
 
-    const observeEvents = async () => {
-      if (!currentContextId) return;
+    // Connect to WebSocket with error handling
+    try {
+      (app as any).connect();
+    } catch (error) {
+      console.warn(
+        'WebSocket connection failed, continuing without real-time updates:',
+        error,
+      );
+    }
 
+    // Add event handler
+    const handleEvent = async (event: any) => {
       try {
-        subscriptionsClient = getWsSubscriptionsClient();
-        await subscriptionsClient.connect();
-        subscriptionsClient.subscribe([currentContextId]);
-
-        subscriptionsClient?.addCallback(async (data: any) => {
-          try {
-            if (data.type === 'StateMutation') {
-              await Promise.all([loadDocuments(), loadContextDetails()]);
-            }
-          } catch (err) {
-            console.error('Error handling state mutation event:', err);
-          }
-        });
+        if (event.type === 'StateMutation') {
+          await Promise.all([loadDocuments(), loadContextDetails()]);
+        }
       } catch (err) {
-        console.error('Failed to subscribe to context events:', err);
+        console.error('Error handling state mutation event:', err);
       }
     };
 
-    observeEvents();
+    try {
+      (app as any).addCallback(handleEvent);
+    } catch (error) {
+      console.warn('Failed to add WebSocket callback:', error);
+    }
+
+    // Subscribe to context
+    try {
+      (app as any).subscribe([
+        { contextId: currentContextId, executorId: '', applicationId: '' },
+      ]);
+    } catch (error) {
+      console.warn('Failed to subscribe to context:', error);
+    }
 
     return () => {
-      if (subscriptionsClient) {
-        subscriptionsClient.disconnect();
+      try {
+        (app as any).removeCallback(handleEvent);
+        (app as any).disconnect();
+      } catch (error) {
+        console.warn('Error during WebSocket cleanup:', error);
       }
     };
-  }, [currentContextId, loadDocuments, loadContextDetails]);
+  }, [currentContextId, loadDocuments, loadContextDetails, app]);
 
   return (
     <MobileLayout>
@@ -811,6 +913,8 @@ const AgreementPage: React.FC = () => {
                   variants={ANIMATION_VARIANTS.item}
                   whileHover={{ y: -2, scale: 1.01 }}
                   whileTap={{ scale: 0.99 }}
+                  onClick={() => handleOpenDocument(document)}
+                  className="cursor-pointer"
                 >
                   <Card className="hover:shadow-lg hover:shadow-primary/5 transition-all duration-300 border-border/50 hover:border-primary/20">
                     <CardContent className="p-4">
@@ -844,13 +948,14 @@ const AgreementPage: React.FC = () => {
                             variant="ghost"
                             size="sm"
                             className="p-2 h-auto w-auto"
-                            onClick={() =>
+                            onClick={(e) => {
+                              e.stopPropagation();
                               setMenuOpenDocId(
                                 menuOpenDocId === document.id
                                   ? null
                                   : document.id,
-                              )
-                            }
+                              );
+                            }}
                           >
                             <MoreVertical className="w-5 h-5" />
                           </Button>
@@ -918,20 +1023,10 @@ const AgreementPage: React.FC = () => {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleOpenDocument(document)}
-                            disabled={loadingPDFPreview}
-                            className="p-2 h-auto w-auto"
-                          >
-                            {loadingPDFPreview ? (
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
-                            ) : (
-                              <Eye className="w-4 h-4" />
-                            )}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDownloadDocument(document)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDownloadDocument(document);
+                            }}
                             className="p-2 h-auto w-auto text-blue-600 hover:text-blue-700"
                           >
                             <Download className="w-4 h-4" />
@@ -939,7 +1034,10 @@ const AgreementPage: React.FC = () => {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleRemoveDocument(document.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveDocument(document.id);
+                            }}
                             className="p-2 h-auto w-auto text-red-600 hover:text-red-700"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -1253,7 +1351,8 @@ const AgreementPage: React.FC = () => {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="w-full max-w-4xl h-[90vh] max-h-[90vh]"
+            className="w-full max-w-4xl h-[90vh] max-h-[90vh] mt-16"
+            style={{ marginTop: '4rem' }}
           >
             <PDFViewer
               file={selectedDocument.file || null}
@@ -1270,7 +1369,6 @@ const AgreementPage: React.FC = () => {
               onDocumentSaved={() => {
                 setShowPDFViewer(false);
                 setSelectedDocument(null);
-
                 loadDocuments();
               }}
             />

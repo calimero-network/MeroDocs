@@ -20,13 +20,7 @@ export class DocumentService {
     icpIdentity?: any,
   ): Promise<{ data?: string; error?: any }> {
     try {
-      const blobResponse = await blobClient.uploadBlob(
-        file,
-        onProgress,
-        '',
-        contextId,
-      );
-      console.log(`Blob upload response:`, blobResponse);
+      const blobResponse = await blobClient.uploadBlob(file, onProgress, '');
 
       if (blobResponse.error) {
         console.error(
@@ -41,9 +35,7 @@ export class DocumentService {
         return { error: { message: 'Failed to get blob ID from upload' } };
       }
 
-      console.log(
-        `Upload completed for ${file.name}: ${blobResponse.data.blobId}`,
-      );
+
 
       // Calculate hash from file for verification
       const arrayBuffer = await file.arrayBuffer();
@@ -140,7 +132,6 @@ export class DocumentService {
         updatedPdfFile,
         onProgress,
         '',
-        contextId,
       );
       console.log(`Blob upload response:`, blobResponse);
 

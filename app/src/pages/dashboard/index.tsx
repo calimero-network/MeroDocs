@@ -1,9 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  getAppEndpointKey,
-  getApplicationId,
-} from '@calimero-network/calimero-client';
+import { useCalimero } from '@calimero-network/calimero-client';
 import {
   FileText,
   Search,
@@ -60,8 +57,7 @@ const NotificationPopup: React.FC<{
 export default function Dashboard() {
   const navigate = useNavigate();
   const { mode } = useTheme();
-  const url = getAppEndpointKey();
-  const applicationId = getApplicationId();
+  const { app } = useCalimero();
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
@@ -78,9 +74,9 @@ export default function Dashboard() {
     null,
   );
 
-  const agreementService = useMemo(() => new AgreementService(), []);
-  const nodeApiService = useMemo(() => new ContextApiDataSource(), []);
-  const clientApiService = useMemo(() => new ClientApiDataSource(), []);
+  const agreementService = useMemo(() => new AgreementService(app), [app]);
+  const nodeApiService = useMemo(() => new ContextApiDataSource(app), [app]);
+  const clientApiService = useMemo(() => new ClientApiDataSource(app), [app]);
 
   const showNotification = useCallback(
     (message: string, type: NotificationType) => {
@@ -116,10 +112,10 @@ export default function Dashboard() {
   }, [agreementService]);
 
   useEffect(() => {
-    if (url && applicationId) {
+    if (app) {
       loadAgreements();
     }
-  }, [url, applicationId, loadAgreements]);
+  }, [app, loadAgreements]);
 
   const stats = [
     {
@@ -132,6 +128,9 @@ export default function Dashboard() {
   ];
 
   const filteredContexts = agreements.filter((agreement) => {
+    if (!agreement.name) {
+      return false;
+    }
     const matchesSearch = agreement.name
       .toLowerCase()
       .includes(searchQuery.toLowerCase());
@@ -217,7 +216,19 @@ export default function Dashboard() {
       }
 
       setJoinProgress('Storing context information...');
+      if (!joinResponse.data) {
+        setError('No data received from join context response');
+        setJoining(false);
+        return;
+      }
+
       const { contextId, memberPublicKey } = joinResponse.data;
+      if (!contextId || !memberPublicKey) {
+        setError('Invalid join context response data');
+        setJoining(false);
+        return;
+      }
+
       localStorage.setItem('agreementContextID', contextId);
       localStorage.setItem('agreementContextUserID', memberPublicKey);
 
