@@ -19,6 +19,8 @@ export enum ClientMethod {
   GET_CONTEXT_DETAILS = 'get_context_details',
   ADD_PARTICIPANT = 'add_participant',
   MARK_PARTICIPANT_SIGNED = 'mark_participant_signed',
+  SET_CONSENT = 'set_consent',
+  HAS_CONSENTED = 'has_consented',
 }
 
 export interface SignatureRecord {
@@ -167,4 +169,16 @@ export interface ClientApi {
     agreementContextID?: string,
     agreementContextUserID?: string,
   ): ApiResponse<void>;
+  setConsent(
+    userId: UserId,
+    documentId: string,
+    agreementContextID?: string,
+    agreementContextUserID?: string,
+  ): ApiResponse<void>;
+  hasConsented(
+    userId: UserId,
+    documentId: string,
+    agreementContextID?: string,
+    agreementContextUserID?: string,
+  ): ApiResponse<boolean>;
 }

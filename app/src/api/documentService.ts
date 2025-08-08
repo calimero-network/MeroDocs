@@ -20,7 +20,12 @@ export class DocumentService {
     icpIdentity?: any,
   ): Promise<{ data?: string; error?: any }> {
     try {
-      const blobResponse = await blobClient.uploadBlob(file, onProgress, '');
+      const blobResponse = await blobClient.uploadBlob(
+        file,
+        onProgress,
+        '',
+        contextId,
+      );
       console.log(`Blob upload response:`, blobResponse);
 
       if (blobResponse.error) {
@@ -135,6 +140,7 @@ export class DocumentService {
         updatedPdfFile,
         onProgress,
         '',
+        contextId,
       );
       console.log(`Blob upload response:`, blobResponse);
 
