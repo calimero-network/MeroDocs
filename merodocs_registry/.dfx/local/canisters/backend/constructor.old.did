@@ -1,8 +1,6 @@
 type AuditAction = variant {
   DocumentUploaded;
   ConsentGiven;
-  SignerRemoved;
-  DocumentCancelled;
   SignerAdded;
   SignatureApplied;
   DocumentCompleted;
