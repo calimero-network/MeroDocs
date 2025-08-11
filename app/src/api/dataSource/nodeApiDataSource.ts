@@ -8,8 +8,8 @@ import type {
   VerifyContextProps,
   VerifyContextResponse,
 } from '../nodeApi';
+import { apiClient } from '@calimero-network/calimero-client';
 
-// This class now needs to be instantiated with the app object from useCalimero
 export class ContextApiDataSource implements NodeApi {
   private app: any;
 
@@ -21,24 +21,24 @@ export class ContextApiDataSource implements NodeApi {
     props: CreateContextProps,
   ): Promise<{ data?: CreateContextResponse; error?: any }> {
     try {
-      if (!this.app) {
-        throw new Error('App not initialized');
+      if (this.app) {
+        const initParams = {
+          is_private: props.is_private,
+          context_name: props.context_name,
+        };
+
+        const result = await this.app.createContext(undefined, initParams);
+        return { data: result, error: null };
       }
+    } catch (error) {
+      console.warn('App createContext failed, falling back to API:', error);
+    }
 
-      // Prepare the initialization parameters
-      const initParams = {
-        is_private: props.is_private,
-        context_name: props.context_name,
-      };
-
-      // Use the new API with correct parameter order:
-      // createContext(protocol, initParams)
-      const result = await this.app.createContext(undefined, initParams);
-
-      return {
-        data: result,
-        error: null,
-      };
+    try {
+      const result = await apiClient
+        .node()
+        .createContext('application-id', JSON.stringify(props), 'protocol');
+      return { data: result.data as CreateContextResponse, error: null };
     } catch (error) {
       let errorMessage = 'An unexpected error occurred during createContext';
       if (error instanceof Error) {
@@ -58,21 +58,23 @@ export class ContextApiDataSource implements NodeApi {
     props: InviteToContextProps,
   ): Promise<{ data?: string; error?: any }> {
     try {
-      if (!this.app) {
-        throw new Error('App not initialized');
+      if (this.app) {
+        const result = await this.app.inviteToContext({
+          contextId: props.contextId,
+          inviterId: props.inviter,
+          inviteeId: props.invitee,
+        });
+        return { data: result, error: null };
       }
+    } catch (error) {
+      console.warn('App inviteToContext failed, falling back to API:', error);
+    }
 
-      // Use the new app.inviteToContext() method
-      const result = await this.app.inviteToContext({
-        contextId: props.contextId,
-        inviterId: props.inviter,
-        inviteeId: props.invitee,
-      });
-
-      return {
-        data: result,
-        error: null,
-      };
+    try {
+      const result = await apiClient
+        .node()
+        .contextInvite(props.contextId, props.inviter, props.invitee);
+      return { data: result.data || undefined, error: null };
     } catch (error) {
       console.error('inviteToContext failed:', error);
       let errorMessage = 'An unexpected error occurred during inviteToContext';
@@ -93,19 +95,21 @@ export class ContextApiDataSource implements NodeApi {
     props: JoinContextProps,
   ): Promise<{ data?: JoinContextResponse; error?: any }> {
     try {
-      if (!this.app) {
-        throw new Error('App not initialized');
+      if (this.app) {
+        const result = await this.app.joinContext({
+          invitationPayload: props.invitationPayload,
+        });
+        return { data: result, error: null };
       }
+    } catch (error) {
+      console.warn('App joinContext failed, falling back to API:', error);
+    }
 
-      // Use the new app.joinContext() method
-      const result = await this.app.joinContext({
-        invitationPayload: props.invitationPayload,
-      });
-
-      return {
-        data: result,
-        error: null,
-      };
+    try {
+      const result = await apiClient
+        .node()
+        .joinContext('private-key', props.invitationPayload);
+      return { data: result.data as JoinContextResponse, error: null };
     } catch (error) {
       console.error('joinContext failed:', error);
       let errorMessage = 'An unexpected error occurred during joinContext';
@@ -126,19 +130,19 @@ export class ContextApiDataSource implements NodeApi {
     props: VerifyContextProps,
   ): Promise<{ data?: VerifyContextResponse; error?: any }> {
     try {
-      if (!this.app) {
-        throw new Error('App not initialized');
+      if (this.app) {
+        const result = await this.app.verifyContext({
+          contextId: props.contextId,
+        });
+        return { data: { joined: result.joined || false }, error: null };
       }
+    } catch (error) {
+      console.warn('App verifyContext failed, falling back to API:', error);
+    }
 
-      // Use the new app.verifyContext() method
-      const result = await this.app.verifyContext({
-        contextId: props.contextId,
-      });
-
-      return {
-        data: { joined: result.joined || false },
-        error: null,
-      };
+    try {
+      const result = await apiClient.node().getContext(props.contextId);
+      return { data: { joined: !!result.data }, error: null };
     } catch (error) {
       console.error('Error fetching context:', error);
       return {

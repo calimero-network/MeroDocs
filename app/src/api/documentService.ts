@@ -35,8 +35,6 @@ export class DocumentService {
         return { error: { message: 'Failed to get blob ID from upload' } };
       }
 
-
-
       // Calculate hash from file for verification
       const arrayBuffer = await file.arrayBuffer();
       const pdfData = new Uint8Array(arrayBuffer);
