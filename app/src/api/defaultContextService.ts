@@ -1,4 +1,5 @@
 import { ContextApiDataSource } from './dataSource/nodeApiDataSource';
+import { apiClient } from '@calimero-network/calimero-client';
 
 export interface DefaultContextInfo {
   contextId: string;
@@ -65,29 +66,42 @@ export class DefaultContextService {
 
   /**
    * Check if a context is a default/private context using the backend API
-   * This uses the Calimero app.execute pattern directly
    */
   async isDefaultPrivateContextViaApi(
     contextInfo: DefaultContextInfo,
   ): Promise<boolean> {
     try {
-      if (!this.app) {
-        console.error('App not initialized');
-        return false;
+      if (this.app) {
+        const result = await this.app.execute(
+          contextInfo,
+          'is_default_private_context',
+          {},
+        );
+
+        const isDefaultPrivate = result?.data || result || false;
+        return Boolean(isDefaultPrivate);
       }
-
-      const result = await this.app.execute(
-        contextInfo,
-        'is_default_private_context',
-        {},
-      );
-
-      // Handle different response structures
-      const isDefaultPrivate = result?.data || result || false;
-
-      return Boolean(isDefaultPrivate);
     } catch (error) {
-      console.error('Error in isDefaultPrivateContextViaApi:', error);
+      console.warn(
+        'App execute failed for is_default_private_context, falling back to API client:',
+        error,
+      );
+    }
+
+    try {
+      const result = await apiClient.node().getContext(contextInfo.contextId);
+      if (result.data) {
+        const context = result.data as any;
+
+        return (
+          context.is_private === true &&
+          (context.context_name === 'default' ||
+            contextInfo.context_name === 'default')
+        );
+      }
+      return false;
+    } catch (error) {
+      console.error('Error in isDefaultPrivateContextViaApi fallback:', error);
       return false;
     }
   }
@@ -100,6 +114,23 @@ export class DefaultContextService {
     data?: any;
     error?: string;
   }> {
+    try {
+      if (this.app) {
+        const initParams = {
+          is_private: true,
+          context_name: 'default',
+        };
+
+        const result = await this.app.createContext(undefined, initParams);
+        return { success: true, data: result };
+      }
+    } catch (error) {
+      console.warn(
+        'App createContext failed, falling back to API service:',
+        error,
+      );
+    }
+
     try {
       const createResponse = await this.nodeApiService.createContext({
         is_private: true,
@@ -121,9 +152,6 @@ export class DefaultContextService {
     }
   }
 
-  /**
-   * Ensure a default context exists - check storage, fetch contexts, or create new one
-   */
   async ensureDefaultContext(): Promise<{
     success: boolean;
     contextInfo?: DefaultContextInfo;
@@ -171,7 +199,27 @@ export class DefaultContextService {
         this.isCreatingContext = true;
       }
 
-      const contexts = await this.app.fetchContexts();
+      let contexts;
+      try {
+        if (this.app && this.app.fetchContexts) {
+          contexts = await this.app.fetchContexts();
+        }
+      } catch (error) {
+        console.warn(
+          'App fetchContexts failed, falling back to API client:',
+          error,
+        );
+      }
+
+      if (!contexts) {
+        try {
+          const result = await apiClient.node().getContexts();
+          contexts = (result.data as unknown as any[]) || [];
+        } catch (error) {
+          console.error('Error fetching contexts via API client:', error);
+          contexts = [];
+        }
+      }
 
       for (const context of contexts) {
         const contextInfo: DefaultContextInfo = {
@@ -203,45 +251,41 @@ export class DefaultContextService {
         return this.ensureDefaultContext();
       }
 
-      try {
-        const createResult = await this.createDefaultContext();
+      const createResult = await this.createDefaultContext();
 
-        if (!createResult.success) {
-          return { success: false, error: createResult.error };
-        }
-
-        const contextInfo: DefaultContextInfo = {
-          contextId: createResult.data.contextId,
-          memberPublicKey:
-            createResult.data.memberPublicKey || createResult.data.executorId,
-          executorId: createResult.data.executorId,
-          applicationId: createResult.data.applicationId,
-          context_name: 'default',
-          is_private: true,
-        };
-
-        this.storeDefaultContext(contextInfo);
-
-        return {
-          success: true,
-          contextInfo,
-          wasCreated: true,
-        };
-      } finally {
-        DefaultContextService.globalCreatingFlag = false;
-        this.isCreatingContext = false;
+      if (!createResult.success) {
+        console.error('Failed to create default context:', createResult.error);
+        return { success: false, error: createResult.error };
       }
+
+      const contextInfo: DefaultContextInfo = {
+        contextId: createResult.data.contextId,
+        memberPublicKey:
+          createResult.data.memberPublicKey || createResult.data.executorId,
+        executorId: createResult.data.executorId,
+        applicationId: createResult.data.applicationId,
+        context_name: 'default',
+        is_private: true,
+      };
+
+      this.storeDefaultContext(contextInfo);
+
+      return {
+        success: true,
+        contextInfo,
+        wasCreated: true,
+      };
     } catch (error: any) {
       DefaultContextService.globalCreatingFlag = false;
       this.isCreatingContext = false;
       console.error('Error ensuring default context:', error);
       return { success: false, error: error.message || 'Unknown error' };
+    } finally {
+      DefaultContextService.globalCreatingFlag = false;
+      this.isCreatingContext = false;
     }
   }
 
-  /**
-   * Clear stored default context (useful for logout or reset)
-   */
   clearStoredDefaultContext(): void {
     try {
       localStorage.removeItem('defaultContext');
