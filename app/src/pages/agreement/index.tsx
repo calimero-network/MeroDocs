@@ -540,9 +540,7 @@ const AgreementPage: React.FC = () => {
 
       try {
         setLoadingPDFPreview(true);
-
         const blob = await blobClient.downloadBlob(document.pdfBlobId);
-
         const file = new File([blob], document.name, {
           type: 'application/pdf',
         });
