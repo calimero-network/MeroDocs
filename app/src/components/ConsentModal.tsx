@@ -115,16 +115,19 @@ const ConsentModal: React.FC<ConsentModalProps> = ({
   const handleAccept = async () => {
     setLoading(true);
     setError(null);
+
     const resp = await clientApiService.setConsent(
       userId,
       documentId,
       agreementContextID,
       agreementContextUserID,
     );
-    setLoading(false);
+
     if (resp.error) {
       setError(resp.error.message);
+      setLoading(false);
     } else {
+      setLoading(false);
       onAccept();
     }
   };
