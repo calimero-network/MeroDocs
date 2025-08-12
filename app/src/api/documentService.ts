@@ -20,12 +20,7 @@ export class DocumentService {
     icpIdentity?: any,
   ): Promise<{ data?: string; error?: any }> {
     try {
-      const blobResponse = await blobClient.uploadBlob(
-        file,
-        onProgress,
-        '',
-        contextId,
-      );
+      const blobResponse = await blobClient.uploadBlob(file, onProgress, '');
       console.log(`Blob upload response:`, blobResponse);
 
       if (blobResponse.error) {
@@ -140,7 +135,6 @@ export class DocumentService {
         updatedPdfFile,
         onProgress,
         '',
-        contextId,
       );
       console.log(`Blob upload response:`, blobResponse);
 
@@ -195,14 +189,17 @@ export class DocumentService {
               });
             }
             const icpApi = await backendService(icpIdentity);
+            const signResult = await icpApi.signDocument({
+              document_id: safeDocumentId,
+              consent_acknowledged: true,
+            });
             const icpResponse = await icpApi.recordFinalHash(
               safeDocumentId,
               newHash,
             );
-            console.log('Final hash uploaded to ICP canister', icpResponse);
           } catch (icpError) {
             console.error(
-              'Failed to upload final hash to ICP canister:',
+              'ICP Backend: Failed to record signature/final hash:',
               icpError,
             );
           }

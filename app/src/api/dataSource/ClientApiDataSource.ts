@@ -13,6 +13,7 @@ import {
   PermissionLevel,
   UserId,
 } from '../clientApi';
+import { backendService } from '../icp/backendService';
 
 const RequestConfig = { timeout: 30000 };
 
@@ -82,6 +83,21 @@ export class ClientApiDataSource implements ClientApi {
             message: getErrorMessage(response.error),
           },
         };
+      }
+
+      try {
+        const safeDocumentId = documentId.replace(/[^a-zA-Z0-9_-]/g, '_');
+        if (documentId !== safeDocumentId) {
+          console.warn('Sanitized documentId for ICP consent recording:', {
+            original: documentId,
+            sanitized: safeDocumentId,
+          });
+        }
+
+        const icpBackend = await backendService();
+        const icpResult = await icpBackend.recordConsent(safeDocumentId);
+      } catch (icpError) {
+        console.warn('Failed to record consent in ICP backend:', icpError);
       }
 
       return {
