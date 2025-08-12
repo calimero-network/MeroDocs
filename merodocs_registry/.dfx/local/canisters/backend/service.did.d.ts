@@ -6,8 +6,7 @@ export type AuditAction = { 'DocumentUploaded' : null } |
   { 'ConsentGiven' : null } |
   { 'SignerAdded' : null } |
   { 'SignatureApplied' : null } |
-  { 'DocumentCompleted' : null } |
-  { 'DocumentViewed' : null };
+  { 'DocumentCompleted' : null };
 export interface AuditEntry {
   'action' : AuditAction,
   'metadata' : [] | [string],
@@ -66,7 +65,6 @@ export type Result_4 = { 'Ok' : [Array<string>, Array<string>] } |
   { 'Err' : Error };
 export interface SigningRequest {
   'document_id' : string,
-  'signature_metadata' : [] | [string],
   'consent_acknowledged' : boolean,
 }
 export type VerificationStatus = { 'Unrecorded' : null } |
@@ -81,7 +79,6 @@ export interface _SERVICE {
   'get_hashes' : ActorMethod<[string], Result_2>,
   'get_signing_progress' : ActorMethod<[string], Result_4>,
   'record_consent' : ActorMethod<[string], Result>,
-  'record_document_view' : ActorMethod<[string], Result>,
   'record_final_hash' : ActorMethod<[string, string], Result>,
   'record_original_hash' : ActorMethod<[string, string], Result>,
   'sign_document' : ActorMethod<[SigningRequest], Result>,

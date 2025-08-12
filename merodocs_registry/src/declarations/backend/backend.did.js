@@ -15,7 +15,6 @@ export const idlFactory = ({ IDL }) => {
     'SignerAdded' : IDL.Null,
     'SignatureApplied' : IDL.Null,
     'DocumentCompleted' : IDL.Null,
-    'DocumentViewed' : IDL.Null,
   });
   const AuditEntry = IDL.Record({
     'action' : AuditAction,
@@ -58,7 +57,6 @@ export const idlFactory = ({ IDL }) => {
   });
   const SigningRequest = IDL.Record({
     'document_id' : IDL.Text,
-    'signature_metadata' : IDL.Opt(IDL.Text),
     'consent_acknowledged' : IDL.Bool,
   });
   const DocumentUploadRequest = IDL.Record({
@@ -84,7 +82,6 @@ export const idlFactory = ({ IDL }) => {
     'get_hashes' : IDL.Func([IDL.Text], [Result_2], ['query']),
     'get_signing_progress' : IDL.Func([IDL.Text], [Result_4], ['query']),
     'record_consent' : IDL.Func([IDL.Text], [Result], []),
-    'record_document_view' : IDL.Func([IDL.Text], [Result], []),
     'record_final_hash' : IDL.Func([IDL.Text, IDL.Text], [Result], []),
     'record_original_hash' : IDL.Func([IDL.Text, IDL.Text], [Result], []),
     'sign_document' : IDL.Func([SigningRequest], [Result], []),

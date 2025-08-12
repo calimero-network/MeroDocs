@@ -99,7 +99,6 @@ struct AuditEntry {
 #[derive(CandidType, Deserialize, Clone, PartialEq)]
 enum AuditAction {
     DocumentUploaded,
-    DocumentViewed,
     ConsentGiven,
     SignatureApplied,
     DocumentCompleted,
@@ -110,7 +109,6 @@ enum AuditAction {
 struct SigningRequest {
     document_id: String,
     consent_acknowledged: bool,
-    signature_metadata: Option<String>,
 }
 
 #[derive(CandidType, Deserialize)]
@@ -323,27 +321,6 @@ fn add_participant(document_id: String, participant_id: String) -> Result<(), Er
 }
 
 #[update]
-fn record_document_view(document_id: String) -> Result<(), Error> {
-    validate_document_id(&document_id)?;
-    let user_id = caller().to_string();
-    let key = StorableString(document_id.clone());
-    if !HASH_STORE.with(|s| s.borrow().contains_key(&key)) {
-        return Err(Error::NotFound);
-    }
-    let audit_entry = AuditEntry {
-        entry_id: generate_audit_id(),
-        user_id,
-        action: AuditAction::DocumentViewed,
-        timestamp: time(),
-        consent_given: None,
-        document_hash_after_action: None,
-        metadata: None,
-    };
-    add_audit_entry(&document_id, audit_entry);
-    Ok(())
-}
-
-#[update]
 fn record_consent(document_id: String) -> Result<(), Error> {
     validate_document_id(&document_id)?;
     let user_id = caller().to_string();
@@ -431,7 +408,7 @@ fn sign_document(request: SigningRequest) -> Result<(), Error> {
                     timestamp: time(),
                     consent_given: Some(true),
                     document_hash_after_action: None,
-                    metadata: request.signature_metadata,
+                    metadata: Some(format!("Signed by: {}", user_id)),
                 };
                 add_audit_entry(&request.document_id, signature_entry);
 

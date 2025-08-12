@@ -4,7 +4,6 @@ type AuditAction = variant {
   SignerAdded;
   SignatureApplied;
   DocumentCompleted;
-  DocumentViewed;
 };
 type AuditEntry = record {
   action : AuditAction;
@@ -59,7 +58,6 @@ type Result_3 = variant { Ok : DocumentStatus; Err : Error };
 type Result_4 = variant { Ok : record { vec text; vec text }; Err : Error };
 type SigningRequest = record {
   document_id : text;
-  signature_metadata : opt text;
   consent_acknowledged : bool;
 };
 type VerificationStatus = variant {
@@ -76,7 +74,6 @@ service : {
   get_hashes : (text) -> (Result_2) query;
   get_signing_progress : (text) -> (Result_4) query;
   record_consent : (text) -> (Result);
-  record_document_view : (text) -> (Result);
   record_final_hash : (text, text) -> (Result);
   record_original_hash : (text, text) -> (Result);
   sign_document : (SigningRequest) -> (Result);
