@@ -57,7 +57,6 @@ export interface DocumentUploadRequest {
 export interface SigningRequest {
   document_id: string;
   consent_acknowledged: boolean;
-  signature_metadata?: string;
 }
 
 export enum VerificationStatus {
