@@ -366,8 +366,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
                 typeof sig.blob_id === 'string'
                   ? sig.blob_id
                   : Buffer.from(sig.blob_id).toString('hex');
-
-              const blob = await blobClient.downloadBlob(blobId);
+              const contextId =
+                localStorage.getItem('agreementContextID') || '';
+              const blob = await blobClient.downloadBlob(blobId, contextId);
               if (blob) {
                 dataURL = await new Promise<string>((resolve) => {
                   const reader = new FileReader();

@@ -540,7 +540,11 @@ const AgreementPage: React.FC = () => {
 
       try {
         setLoadingPDFPreview(true);
-        const blob = await blobClient.downloadBlob(document.pdfBlobId);
+        const contextID = localStorage.getItem('agreementContextID');
+        const blob = await blobClient.downloadBlob(
+          document.pdfBlobId,
+          contextID || '',
+        );
         const file = new File([blob], document.name, {
           type: 'application/pdf',
         });
@@ -586,7 +590,11 @@ const AgreementPage: React.FC = () => {
       }
 
       try {
-        const blob = await blobClient.downloadBlob(doc.pdfBlobId);
+        const contextID = localStorage.getItem('agreementContextID');
+        const blob = await blobClient.downloadBlob(
+          doc.pdfBlobId,
+          contextID || ' ',
+        );
 
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
