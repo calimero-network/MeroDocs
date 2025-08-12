@@ -35,9 +35,15 @@ export class ContextApiDataSource implements NodeApi {
     }
 
     try {
+      const applicationId = import.meta.env.VITE_APPLICATION_ID;
+      if (!applicationId) {
+        throw new Error(
+          'Application ID not available in environment variables',
+        );
+      }
       const result = await apiClient
         .node()
-        .createContext('application-id', JSON.stringify(props), 'protocol');
+        .createContext(applicationId, JSON.stringify(props), 'protocol');
       return { data: result.data as CreateContextResponse, error: null };
     } catch (error) {
       let errorMessage = 'An unexpected error occurred during createContext';
