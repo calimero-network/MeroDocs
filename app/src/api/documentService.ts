@@ -55,12 +55,6 @@ export class DocumentService {
         try {
           let documentId = response.data;
           const safeDocumentId = this.sanitizeDocumentId(documentId);
-          if (documentId !== safeDocumentId) {
-            console.warn('Sanitized documentId for ICP:', {
-              original: documentId,
-              sanitized: safeDocumentId,
-            });
-          }
           const icpApi = await backendService(icpIdentity);
           const icpResponse = await icpApi.recordOriginalHash(
             safeDocumentId,
@@ -131,7 +125,6 @@ export class DocumentService {
         onProgress,
         '',
       );
-      console.log(`Blob upload response:`, blobResponse);
 
       if (blobResponse.error) {
         console.error(
@@ -177,12 +170,6 @@ export class DocumentService {
           // On successful sign and mark, also upload the final hash to ICP canister
           try {
             const safeDocumentId = this.sanitizeDocumentId(documentId);
-            if (documentId !== safeDocumentId) {
-              console.warn('Sanitized documentId for ICP:', {
-                original: documentId,
-                sanitized: safeDocumentId,
-              });
-            }
             const icpApi = await backendService(icpIdentity);
             const icpResponse = await icpApi.recordFinalHash(
               safeDocumentId,

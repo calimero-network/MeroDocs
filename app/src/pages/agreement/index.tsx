@@ -415,12 +415,6 @@ const AgreementPage: React.FC = () => {
           try {
             let documentId = response.data;
             const safeDocumentId = sanitizeDocumentId(documentId);
-            if (documentId !== safeDocumentId) {
-              console.warn('Sanitized documentId for ICP:', {
-                original: documentId,
-                sanitized: safeDocumentId,
-              });
-            }
             const icpApi = await backendService(identity);
             const icpResponse = await icpApi.recordOriginalHash(
               safeDocumentId,

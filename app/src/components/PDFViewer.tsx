@@ -390,11 +390,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
             };
           }),
         );
-
-        console.log(
-          'fetchSignatures: processed signatures:',
-          signaturesWithImages,
-        );
         setSavedSignatures(signaturesWithImages);
       } catch (error) {
         console.error('Failed to list signatures:', error);
