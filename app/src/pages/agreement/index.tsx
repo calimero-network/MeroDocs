@@ -703,18 +703,8 @@ const AgreementPage: React.FC = () => {
   useEffect(() => {
     if (!currentContextId || !app) return;
 
-    // Connect to WebSocket with error handling
-    try {
-      (app as any).connect();
-    } catch (error) {
-      console.warn(
-        'WebSocket connection failed, continuing without real-time updates:',
-        error,
-      );
-    }
-
-    // Add event handler
-    const handleEvent = async (event: any) => {
+    // Event handler for state mutations
+    const eventCallback = async (event: any) => {
       try {
         if (event.type === 'StateMutation') {
           await Promise.all([loadDocuments(), loadContextDetails()]);
@@ -724,27 +714,18 @@ const AgreementPage: React.FC = () => {
       }
     };
 
+    // Subscribe to events
     try {
-      (app as any).addCallback(handleEvent);
+      app.subscribeToEvents([currentContextId], eventCallback);
     } catch (error) {
-      console.warn('Failed to add WebSocket callback:', error);
-    }
-
-    // Subscribe to context
-    try {
-      (app as any).subscribe([
-        { contextId: currentContextId, executorId: '', applicationId: '' },
-      ]);
-    } catch (error) {
-      console.warn('Failed to subscribe to context:', error);
+      console.warn('Failed to subscribe to context events:', error);
     }
 
     return () => {
       try {
-        (app as any).removeCallback(handleEvent);
-        (app as any).disconnect();
+        app.unsubscribeFromEvents([currentContextId]);
       } catch (error) {
-        console.warn('Error during WebSocket cleanup:', error);
+        console.warn('Error during event unsubscription:', error);
       }
     };
   }, [currentContextId, loadDocuments, loadContextDetails, app]);

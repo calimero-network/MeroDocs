@@ -940,13 +940,3 @@ export class ClientApiDataSource implements ClientApi {
     }
   }
 }
-
-export function getWsSubscriptionsClient() {
-  const appEndpointKey = getAppEndpointKey();
-  if (!appEndpointKey) {
-    throw new Error(
-      'Application endpoint key is missing. Please check your configuration.',
-    );
-  }
-  return new WsSubscriptionsClient(appEndpointKey, '/ws');
-}
