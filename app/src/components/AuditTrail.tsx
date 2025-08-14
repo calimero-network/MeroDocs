@@ -4,7 +4,6 @@ import {
   Clock,
   User,
   FileText,
-  Eye,
   Check,
   UserPlus,
   Shield,

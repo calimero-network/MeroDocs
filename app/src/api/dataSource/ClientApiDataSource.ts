@@ -627,7 +627,6 @@ export class ClientApiDataSource implements ClientApi {
           ClientMethod.LIST_SIGNATURES,
           {},
         );
-
         const extractedData = result.data || result;
 
         if (

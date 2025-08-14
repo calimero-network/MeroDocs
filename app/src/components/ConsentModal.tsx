@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Button } from './ui/button';
+import { useCalimero } from '@calimero-network/calimero-client';
 import { ClientApiDataSource } from '../api/dataSource/ClientApiDataSource';
 
 interface ConsentModalProps {
@@ -109,14 +110,15 @@ const ConsentModal: React.FC<ConsentModalProps> = ({
   const [showDisclosure, setShowDisclosure] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const clientApiService = useMemo(() => new ClientApiDataSource(), []);
+  const { app } = useCalimero();
+  const api = useMemo(() => new ClientApiDataSource(app), [app]);
   if (!open) return null;
 
   const handleAccept = async () => {
     setLoading(true);
     setError(null);
 
-    const resp = await clientApiService.setConsent(
+    const resp = await api.setConsent(
       userId,
       documentId,
       agreementContextID,

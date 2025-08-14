@@ -121,7 +121,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
   const documentService = new DocumentService();
   const { identity } = useIcpAuth();
-  const clientApiService = useMemo(() => new ClientApiDataSource(), []);
 
   const agreementContextID =
     localStorage.getItem('agreementContextID') || undefined;
@@ -164,12 +163,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
     }
   }, [pdf, scale]);
 
-  const handleSignatureSelect = useCallback(
-    (signatureId: string) => {
-      setSelectedSignatureId(signatureId);
-    },
-    [clientApiService],
-  );
+  const handleSignatureSelect = useCallback((signatureId: string) => {
+    setSelectedSignatureId(signatureId);
+  }, []);
 
   const handleSignatureUpdate = useCallback(
     (updatedSignature: SignaturePosition) => {
@@ -345,7 +341,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
   useEffect(() => {
     async function fetchSignatures() {
       try {
-        const response = await clientApiService.listSignatures();
+        const response = await api.listSignatures();
 
         let signaturesArray: any[] = [];
 
@@ -411,10 +407,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
     fetchSignatures();
   }, [api]);
-
-  const handleStartSigning = () => {
-    setShowSignatureOptions(true);
-  };
 
   const handleCreateNewSignature = () => {
     setShowSignatureOptions(false);
@@ -656,7 +648,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
       setConsentLoading(false);
       return;
     }
-    const resp = await clientApiService.hasConsented(
+    const resp = await api.hasConsented(
       agreementContextUserID || ' ',
       documentId!,
       agreementContextID,
