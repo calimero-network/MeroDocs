@@ -1,27 +1,10 @@
-/**
- * Audit Trail Component - ICP Blockchain Integration
- *
- * ID STANDARDIZATION FLOW:
- * 1. Original Document ID: Raw document ID from the system (may contain special chars)
- * 2. Sanitized Document ID: Special characters replaced with underscores [a-zA-Z0-9_-]
- * 3. Backend Query ID: Uses SANITIZED document ID only (what's stored in ICP canister)
- * 4. Display ICP Document ID: Combination of contextId + sanitized ID (for display only)
- *
- * IMPORTANT: The ICP canister stores audit entries with just the sanitized document ID,
- * NOT the combined contextId + documentId. The generateIcpDocumentId() function is
- * only used for display purposes in the UI.
- *
- * This standardization ensures consistent ID handling between:
- * - Document upload (DocumentService.sanitizeDocumentId -> ICP canister storage)
- * - Audit trail retrieval (this component -> ICP canister query)
- */
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Clock,
   User,
   FileText,
+  Eye,
   Check,
   UserPlus,
   Shield,

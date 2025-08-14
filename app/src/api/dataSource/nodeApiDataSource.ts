@@ -114,7 +114,7 @@ export class ContextApiDataSource implements NodeApi {
     try {
       const result = await apiClient
         .node()
-        .joinContext('private-key', props.invitationPayload);
+        .joinContext(props.invitationPayload);
       return { data: result.data as JoinContextResponse, error: null };
     } catch (error) {
       console.error('joinContext failed:', error);

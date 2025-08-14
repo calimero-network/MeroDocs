@@ -109,12 +109,7 @@ export default function SignaturesPage() {
     const file = new File([blob], 'signature.png', { type: blob.type });
     const onProgress = (progress: number) => {};
 
-    const blobResponse = await blobClient.uploadBlob(
-      file,
-      onProgress,
-      '',
-      contextId || undefined,
-    );
+    const blobResponse = await blobClient.uploadBlob(file, onProgress, '');
 
     if (blobResponse.error || !blobResponse.data?.blobId) {
       const errorMessage =
