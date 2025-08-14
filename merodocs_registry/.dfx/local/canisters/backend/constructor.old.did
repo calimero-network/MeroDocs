@@ -58,7 +58,6 @@ type Result_3 = variant { Ok : DocumentStatus; Err : Error };
 type Result_4 = variant { Ok : record { vec text; vec text }; Err : Error };
 type SigningRequest = record {
   document_id : text;
-  signature_metadata : opt text;
   consent_acknowledged : bool;
 };
 type VerificationStatus = variant {
