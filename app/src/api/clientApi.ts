@@ -21,6 +21,7 @@ export enum ClientMethod {
   MARK_PARTICIPANT_SIGNED = 'mark_participant_signed',
   SET_CONSENT = 'set_consent',
   HAS_CONSENTED = 'has_consented',
+  IS_DEFAULT_PRIVATE_CONTEXT = 'is_default_private_context',
 }
 
 export interface SignatureRecord {
@@ -181,4 +182,5 @@ export interface ClientApi {
     agreementContextID?: string,
     agreementContextUserID?: string,
   ): ApiResponse<boolean>;
+  isDefaultPrivateContext(): ApiResponse<boolean>;
 }

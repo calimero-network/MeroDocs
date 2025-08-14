@@ -35,7 +35,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { DocumentService } from '../api/documentService';
 import { useIcpAuth } from '../contexts/IcpAuthContext';
 import { ClientApiDataSource } from '../api/dataSource/ClientApiDataSource';
-import { blobClient, getContextId } from '@calimero-network/calimero-client';
+import { blobClient, useCalimero } from '@calimero-network/calimero-client';
 import ConsentModal from './ConsentModal';
 
 interface SavedSignature {
@@ -89,6 +89,8 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
   showSaveToContext = false,
   onDocumentSaved,
 }) => {
+  const { app } = useCalimero();
+  const api = useMemo(() => new ClientApiDataSource(app), [app]);
   const { mode } = useTheme();
   const [pdf, setPdf] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const [pages, setPages] = useState<PDFPage[]>([]);
@@ -344,22 +346,41 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
     async function fetchSignatures() {
       try {
         const response = await clientApiService.listSignatures();
-        if (!response.data || !Array.isArray(response.data)) {
+
+        let signaturesArray: any[] = [];
+
+        if (response.data) {
+          if (Array.isArray(response.data)) {
+            signaturesArray = response.data;
+          } else if (
+            response.data.output &&
+            Array.isArray(response.data.output)
+          ) {
+            signaturesArray = response.data.output;
+          } else if (
+            response.data.result &&
+            Array.isArray(response.data.result)
+          ) {
+            signaturesArray = response.data.result;
+          }
+        }
+
+        if (!signaturesArray || signaturesArray.length === 0) {
           setSavedSignatures([]);
           return;
         }
 
-        const contextId = getContextId();
         const signaturesWithImages = await Promise.all(
-          response.data.map(async (sig: any) => {
+          signaturesArray.map(async (sig: any) => {
             let dataURL = '';
             try {
               const blobId =
                 typeof sig.blob_id === 'string'
                   ? sig.blob_id
                   : Buffer.from(sig.blob_id).toString('hex');
-
-              const blob = await blobClient.downloadBlob(blobId);
+              const contextId =
+                localStorage.getItem('agreementContextID') || '';
+              const blob = await blobClient.downloadBlob(blobId, contextId);
               if (blob) {
                 dataURL = await new Promise<string>((resolve) => {
                   const reader = new FileReader();
@@ -389,7 +410,11 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
     }
 
     fetchSignatures();
-  }, []);
+  }, [api]);
+
+  const handleStartSigning = () => {
+    setShowSignatureOptions(true);
+  };
 
   const handleCreateNewSignature = () => {
     setShowSignatureOptions(false);
