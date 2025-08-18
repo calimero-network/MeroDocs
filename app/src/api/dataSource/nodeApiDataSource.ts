@@ -43,7 +43,7 @@ export class ContextApiDataSource implements NodeApi {
       }
       const result = await apiClient
         .node()
-        .createContext(applicationId, JSON.stringify(props), 'protocol');
+        .createContext(applicationId, JSON.stringify(props), 'near');
       return { data: result.data as CreateContextResponse, error: null };
     } catch (error) {
       let errorMessage = 'An unexpected error occurred during createContext';
