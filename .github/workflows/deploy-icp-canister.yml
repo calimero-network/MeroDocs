@@ -3,8 +3,8 @@ name: Deploy ICP Canister
 on:
   push:
     tags:
-      - "v*.*.*" # Triggers on version tags like v1.0.0, v1.2.3
-  workflow_dispatch: # Allows manual deployment from GitHub UI
+      - "v*.*.*"
+  workflow_dispatch:
     inputs:
       environment:
         description: "Environment to deploy to"
@@ -14,14 +14,20 @@ on:
         options:
           - mainnet
           - local
+      cycles_amount:
+        description: "Cycles (in trillions)"
+        required: false
+        default: "1.0"
+        type: string
 
 env:
   DFX_VERSION: "0.28.0"
   RUST_VERSION: "1.89.0"
+  DFX_NETWORK: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'local' && 'local' || 'ic' }}
 
 jobs:
-  build-and-test:
-    name: Build and Test Canister
+  build-and-deploy:
+    name: Build and Deploy
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -31,7 +37,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Rust
+      - name: Setup Rust
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
@@ -40,7 +46,7 @@ jobs:
           override: true
 
       - name: Cache Rust dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/bin/
@@ -49,121 +55,52 @@ jobs:
             ~/.cargo/git/db/
             ./merodocs_registry/target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
 
-      - name: Install candid-extractor
-        run: cargo install candid-extractor --version 0.1.4
-
-      - name: Install dfx
+      - name: Install tools
         run: |
-          wget https://github.com/dfinity/sdk/releases/download/${{ env.DFX_VERSION }}/dfx-${{ env.DFX_VERSION }}-x86_64-linux.tar.gz
-          tar -xzf dfx-${{ env.DFX_VERSION }}-x86_64-linux.tar.gz
-          sudo mv dfx /usr/local/bin/dfx
-          dfx --version
-
-      - name: Build canister
-        run: |
-          dfx start --background --clean
-          dfx build
-          dfx stop
-
-      - name: Run basic tests
-        run: |
-          # Build the canister to ensure it compiles correctly
-          cargo build --target wasm32-unknown-unknown --release -p backend
-
-          # Verify the WASM file was created
-          ls -la target/wasm32-unknown-unknown/release/backend.wasm
-
-          # Extract and verify Candid interface
-          candid-extractor target/wasm32-unknown-unknown/release/backend.wasm > backend/backend.did
-          echo "✅ Canister built and Candid interface extracted successfully"
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: canister-build
-          path: |
-            ./merodocs_registry/target/wasm32-unknown-unknown/release/backend.wasm
-            ./merodocs_registry/backend/backend.did
-
-  deploy:
-    name: Deploy to ICP Mainnet
-    needs: build-and-test
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
-    defaults:
-      run:
-        working-directory: ./merodocs_registry
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v3
-        with:
-          name: canister-build
-          path: ./merodocs_registry/
-
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: ${{ env.RUST_VERSION }}
-          target: wasm32-unknown-unknown
-          override: true
-
-      - name: Install candid-extractor
-        run: cargo install candid-extractor --version 0.1.4
-
-      - name: Install dfx
-        run: |
-          wget https://github.com/dfinity/sdk/releases/download/${{ env.DFX_VERSION }}/dfx-${{ env.DFX_VERSION }}-x86_64-linux.tar.gz
-          tar -xzf dfx-${{ env.DFX_VERSION }}-x86_64-linux.tar.gz
-          sudo mv dfx /usr/local/bin/dfx
-          dfx --version
+          cargo install candid-extractor --version 0.1.4
+          sh -ci "$(curl -fsSL https://internetcomputer.org/install.sh)" -- --version ${{ env.DFX_VERSION }}
+          echo "$HOME/bin" >> $GITHUB_PATH
 
       - name: Setup dfx identity
+        if: env.DFX_NETWORK == 'ic'
         run: |
           echo "${{ secrets.DFX_IDENTITY_PEM }}" > identity.pem
+          if dfx identity list | grep -q "deployment"; then
+            dfx identity remove deployment
+          fi
           dfx identity import deployment identity.pem
           dfx identity use deployment
           rm identity.pem
-          echo "✅ Identity configured"
 
-      - name: Deploy to ICP Mainnet
+      - name: Start local dfx
+        if: env.DFX_NETWORK == 'local'
+        run: dfx start --background --clean
+
+      - name: Build canister
         run: |
-          # Install npm dependencies if package.json exists (as per BUILD.md step 4)
-          if [ -f "package.json" ]; then
-            echo "📦 Installing npm dependencies..."
-            npm install
+          dfx build
+          cargo build --target wasm32-unknown-unknown --release -p backend
+          candid-extractor target/wasm32-unknown-unknown/release/backend.wasm > backend/backend.did
+
+      - name: Deploy canister
+        run: |
+          if [ "${{ env.DFX_NETWORK }}" = "ic" ]; then
+            CYCLES=$(echo "${{ github.event.inputs.cycles_amount || '1.0' }} * 1000000000000" | bc -l | cut -d. -f1)
+            dfx deploy --network ic --with-cycles $CYCLES
+          else
+            dfx deploy
           fi
 
-          # Deploy to mainnet (as per BUILD.md step 6)
-          echo "🚀 Deploying to ICP mainnet with cycles..."
-          dfx deploy --network ic --with-cycles 1000000000000
-
-          echo "✅ Deployment completed successfully!"
-
-          # Show canister info and cycles status
-          echo "📊 Canister information:"
-          dfx canister --network ic info backend
-
-          # Check cycles balance (important for ongoing operations)
-          echo "💰 Cycles status:"
-          dfx canister --network ic status backend --with-cycles || echo "Note: Cycles status check failed (this is normal for new deployments)"
-
-      - name: Create deployment summary
+      - name: Get canister info
         run: |
-          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Network:** ICP Mainnet" >> $GITHUB_STEP_SUMMARY
-          echo "**Canister:** backend" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Canister URLs:" >> $GITHUB_STEP_SUMMARY
-          CANISTER_ID=$(dfx canister --network ic id backend)
-          echo "- **Backend:** https://${CANISTER_ID}.icp0.io" >> $GITHUB_STEP_SUMMARY
-          echo "- **Candid UI:** https://a4gq6-oaaaa-aaaab-qaa4q-cai.raw.icp0.io/?id=${CANISTER_ID}" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ env.DFX_NETWORK }}" = "ic" ]; then
+            CANISTER_ID=$(dfx canister --network ic id backend)
+            echo "**Canister ID**: $CANISTER_ID" >> $GITHUB_STEP_SUMMARY
+            echo "**URL**: https://${CANISTER_ID}.icp0.io" >> $GITHUB_STEP_SUMMARY
+          else
+            CANISTER_ID=$(dfx canister id backend)
+            echo "**Canister ID**: $CANISTER_ID" >> $GITHUB_STEP_SUMMARY
+            echo "**URL**: http://localhost:4943/?canisterId=$CANISTER_ID" >> $GITHUB_STEP_SUMMARY
+            dfx stop
+          fi
