@@ -1,0 +1,1 @@
+service : { contract_analysis : (text) -> (text) }
