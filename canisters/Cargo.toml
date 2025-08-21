@@ -1,0 +1,3 @@
+[workspace]
+members = ["merodocs_registry", "ai_document_analysis"]
+resolver = "2"

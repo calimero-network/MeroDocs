@@ -1,0 +1,6 @@
+service : {
+  analyze_contract : (text) -> (text);
+  analyze_large_contract : (text) -> (text);
+  chunked_contract_analysis : (text) -> (text);
+  quick_analyze : (text) -> (text);
+}
