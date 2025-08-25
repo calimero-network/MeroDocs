@@ -1,27 +1,18 @@
 import { Actor, HttpAgent } from '@dfinity/agent';
 import { AuthClient } from '@dfinity/auth-client';
 import { idlFactory } from '../../../../merodocs_registry/src/declarations/backend/backend.did.js';
+import { validateEnvironment, getNetworkConfig } from './utils';
 
-const network = import.meta.env.VITE_DFX_NETWORK || 'local';
+// Validate environment on import
+validateEnvironment();
 
-const LOCAL_CANISTER_ID =
-  import.meta.env.VITE_BACKEND_CANISTER_ID || 'uxrrr-q7777-77774-qaaaq-cai';
-const MAINNET_CANISTER_ID = import.meta.env.VITE_MAINNET_BACKEND_CANISTER_ID;
-
-const IDENTITY_PROVIDER =
-  network === 'ic'
-    ? 'https://identity.ic0.app'
-    : 'http://rdmx6-jaaaa-aaaaa-aaadq-cai.localhost:4943';
-
-const HOST_URL = network === 'ic' ? 'https://ic0.app' : 'http://127.0.0.1:4943';
-
-const backendCanisterId =
-  network === 'ic' ? MAINNET_CANISTER_ID : LOCAL_CANISTER_ID;
+const { network, backendCanisterId, isMainnet, hostUrl, identityProvider } =
+  getNetworkConfig();
 
 export async function createBackendActor(identity?: any) {
   const agent = await HttpAgent.create({
     identity,
-    host: HOST_URL,
+    host: hostUrl,
   });
 
   if (network === 'local') {
@@ -59,7 +50,7 @@ export async function loginWithInternetIdentity(): Promise<boolean> {
 
   return new Promise((resolve) => {
     client.login({
-      identityProvider: IDENTITY_PROVIDER,
+      identityProvider: identityProvider,
       onSuccess: () => {
         resolve(true);
       },
