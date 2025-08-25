@@ -58,35 +58,46 @@ jobs:
 
       - name: Install tools
         run: |
+          sudo apt-get update && sudo apt-get install -y bc
           cargo install candid-extractor --version 0.1.4
-          sh -ci "$(curl -fsSL https://internetcomputer.org/install.sh)" -- --version ${{ env.DFX_VERSION }}
-          echo "$HOME/bin" >> $GITHUB_PATH
+          DFXVM_INIT_YES=true DFX_VERSION=${{ env.DFX_VERSION }} sh -c "$(curl -fsSL https://internetcomputer.org/install.sh)"
+          echo "$HOME/.local/share/dfx/bin" >> $GITHUB_PATH
+
+      - name: Verify DFX installation
+        run: |
+          source "$HOME/.local/share/dfx/env"
+          dfx --version
 
       - name: Setup dfx identity
         if: env.DFX_NETWORK == 'ic'
         run: |
+          source "$HOME/.local/share/dfx/env"
           echo "${{ secrets.DFX_IDENTITY_PEM }}" > identity.pem
           if dfx identity list | grep -q "deployment"; then
             dfx identity remove deployment
           fi
-          dfx identity import deployment identity.pem
+          dfx identity import deployment identity.pem --force
           dfx identity use deployment
           rm identity.pem
 
       - name: Start local dfx
         if: env.DFX_NETWORK == 'local'
-        run: dfx start --background --clean
+        run: |
+          source "$HOME/.local/share/dfx/env"
+          dfx start --background --clean
 
       - name: Build canister
         run: |
+          source "$HOME/.local/share/dfx/env"
           dfx build
           cargo build --target wasm32-unknown-unknown --release -p backend
           candid-extractor target/wasm32-unknown-unknown/release/backend.wasm > backend/backend.did
 
       - name: Deploy canister
         run: |
+          source "$HOME/.local/share/dfx/env"
           if [ "${{ env.DFX_NETWORK }}" = "ic" ]; then
-            CYCLES=$(echo "${{ github.event.inputs.cycles_amount || '1.0' }} * 1000000000000" | bc -l | cut -d. -f1)
+            CYCLES=$(echo "${{ github.event.inputs.cycles_amount }} * 1000000000000" | bc -l | cut -d. -f1)
             dfx deploy --network ic --with-cycles $CYCLES
           else
             dfx deploy
@@ -94,6 +105,7 @@ jobs:
 
       - name: Get canister info
         run: |
+          source "$HOME/.local/share/dfx/env"
           if [ "${{ env.DFX_NETWORK }}" = "ic" ]; then
             CANISTER_ID=$(dfx canister --network ic id backend)
             echo "**Canister ID**: $CANISTER_ID" >> $GITHUB_STEP_SUMMARY
@@ -102,5 +114,10 @@ jobs:
             CANISTER_ID=$(dfx canister id backend)
             echo "**Canister ID**: $CANISTER_ID" >> $GITHUB_STEP_SUMMARY
             echo "**URL**: http://localhost:4943/?canisterId=$CANISTER_ID" >> $GITHUB_STEP_SUMMARY
-            dfx stop
           fi
+
+      - name: Stop local dfx (cleanup)
+        if: always() && env.DFX_NETWORK == 'local'
+        run: |
+          source "$HOME/.local/share/dfx/env"
+          dfx stop
