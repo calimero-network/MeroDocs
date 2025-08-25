@@ -63,6 +63,8 @@ jobs:
           dfx identity import deployment identity.pem --disable-encryption
           dfx identity use deployment
           rm identity.pem
+          # Set environment variable to suppress mainnet plaintext identity warning
+          echo "DFX_WARNING=-mainnet_plaintext_identity" >> $GITHUB_ENV
 
       - name: Build canister
         run: |
