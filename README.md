@@ -31,7 +31,7 @@
 
 Each user can maintain a **personal signature library** within their private default context. This feature allows users to:
 
-- **Create and Store Signatures**: Users can draw, type, or upload their digital signatures securely within their private workspace
+- **Create and Store Signatures**: Users can draw their digital signatures securely within their private workspace
 - **Reuse Signatures**: Once created, signatures can be applied to multiple documents without recreating them
 - **Privacy-First Storage**: All signatures remain stored locally on the user's node—never exposed to external parties
 - **Quick Access**: Stored signatures are readily available when signing documents, streamlining the signing process
