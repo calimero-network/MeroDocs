@@ -1,0 +1,18 @@
+type AssistantMessage = record {
+  content : opt text;
+  tool_calls : vec ToolCall;
+};
+type ChatMessage = variant {
+  tool : record { content : text; tool_call_id : text };
+  user : record { content : text };
+  assistant : AssistantMessage;
+  system : record { content : text };
+};
+type FunctionCall = record { name : text; arguments : vec ToolCallArgument };
+type ToolCall = record { id : text; function : FunctionCall };
+type ToolCallArgument = record { value : text; name : text };
+service : {
+  analyze_contract : (text, opt text) -> (text);
+  chat : (vec ChatMessage) -> (text);
+  prompt : (text) -> (text);
+}
