@@ -363,65 +363,36 @@ const AgreementPage: React.FC = () => {
       ]);
 
       try {
-        const result = await blobClient.uploadBlob(file, (progress: number) => {
-          setUploadFiles((prev) =>
-            prev.map((f) =>
-              f.file && f.file.name === file.name ? { ...f, progress } : f,
-            ),
-          );
-        });
 
-        if (result.error) {
+        const response = await documentService.uploadDocument(
+          currentContextId,
+          file.name,
+          file, 
+          agreementContextID || undefined,
+          agreementContextUserID || undefined,
+          (progress: number) => {
+            setUploadFiles((prev) =>
+              prev.map((f) =>
+                f.file && f.file.name === file.name ? { ...f, progress } : f,
+              ),
+            );
+          },
+        );
+
+        if (response.error) {
           setUploadFiles((prev) =>
             prev.map((f) =>
               f.file && f.file.name === file.name
-                ? { ...f, uploading: false, error: result.error.message }
+                ? { ...f, uploading: false, error: response.error.message }
                 : f,
             ),
           );
           setUploading(false);
-          setError(result.error.message);
-          console.error(`Failed to upload ${file.name}:`, result.error);
+          setError(response.error.message);
+          console.error(`Failed to upload ${file.name}:`, response.error);
           return;
         }
-        let blobId: string | undefined;
-
-        if (result && result.data && typeof result.data.blobId === 'string') {
-          blobId = result.data.blobId;
-        }
-
-        if (!blobId) {
-          const errorMsg = 'Upload succeeded but no blob ID returned';
-          console.error('uploadBlob result structure:', result);
-          setUploadFiles((prev) =>
-            prev.map((f) => ({
-              ...f,
-              uploading: false,
-              error: errorMsg,
-            })),
-          );
-          setUploading(false);
-          setError(errorMsg);
-          console.error(`Failed to upload ${file.name}:`, errorMsg);
-          return;
-        }
-
-        // Calculate hash from file for verification
-        const arrayBuffer = await file.arrayBuffer();
-        const pdfData = new Uint8Array(arrayBuffer);
-        const hash = await calculateFileHash(pdfData);
-
-        // Register the document with the backend using the blob ID
-        const response = await clientApiService.uploadDocument(
-          currentContextId,
-          file.name,
-          hash,
-          blobId,
-          file.size,
-          agreementContextID || undefined,
-          agreementContextUserID || undefined,
-        );
-
+ 
         setUploadFiles((prev) =>
           prev.map((f) =>
             f.file && f.file.name === file.name
@@ -430,7 +401,6 @@ const AgreementPage: React.FC = () => {
                   uploading: false,
                   uploaded: true,
                   progress: 100,
-                  blob_id: blobId,
                 }
               : f,
           ),
@@ -455,7 +425,7 @@ const AgreementPage: React.FC = () => {
         setError(`Upload error: ${error}`);
       }
     },
-    [app, currentContextId, loadDocuments, showNotification, clientApiService],
+    [app, currentContextId, loadDocuments, showNotification, documentService],
   );
 
   const handleUploadClick = useCallback(() => {
