@@ -79,6 +79,7 @@ export const dateToBigint = (date: Date): bigint => {
 export const validateEnvironment = (): void => {
   const network = import.meta.env.VITE_DFX_NETWORK;
   const backendCanisterId = import.meta.env.VITE_BACKEND_CANISTER_ID;
+  const llmChatbotCanisterId = import.meta.env.VITE_LLM_CHATBOT_CANISTER_ID; // NEW
 
   if (!network) {
     console.warn('⚠️ VITE_DFX_NETWORK not set, defaulting to local');
@@ -90,8 +91,15 @@ export const validateEnvironment = (): void => {
     );
   }
 
+  if (!llmChatbotCanisterId) {
+    throw new Error(
+      '❌ VITE_LLM_CHATBOT_CANISTER_ID is required but not set in environment variables',
+    );
+  }
+
   console.log(`✅ Environment configured for ${network || 'local'} network`);
-  console.log(`✅ Backend Canister ID: ${backendCanisterId}`);
+  console.log(`✅ Registry Canister ID: ${backendCanisterId}`);
+  console.log(`✅ Chatbot Canister ID: ${llmChatbotCanisterId}`);
 };
 
 /**
@@ -100,15 +108,17 @@ export const validateEnvironment = (): void => {
 export const getNetworkConfig = () => {
   const network = import.meta.env.VITE_DFX_NETWORK || 'local';
   const backendCanisterId = import.meta.env.VITE_BACKEND_CANISTER_ID;
+  const llmChatbotCanisterId = import.meta.env.VITE_LLM_CHATBOT_CANISTER_ID; // NEW
   const isMainnet = network === 'ic';
 
   return {
     network,
     backendCanisterId,
+    llmChatbotCanisterId,
     isMainnet,
-    hostUrl: isMainnet ? 'https://ic0.app' : 'http://127.0.0.1:4943',
+    hostUrl: isMainnet ? 'https://icp-api.io' : 'http://127.0.0.1:4943',
     identityProvider: isMainnet
       ? 'https://identity.ic0.app'
-      : `http://${import.meta.env.VITE_INTERNET_IDENTITY_CANISTER_ID || 'be2us-64aaa-aaaaa-qaabq-cai'}.localhost:4943`,
+      : `http://127.0.0.1:4943?canisterId=${import.meta.env.VITE_INTERNET_IDENTITY_CANISTER_ID}`,
   };
 };

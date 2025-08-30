@@ -1,4 +1,4 @@
-import { createBackendActor, getAuthClient } from './backendActor';
+import { createMeroDocsRegistryActor, getAuthClient } from './backendActor';
 import { authService } from '../../contexts/IcpAuthContext';
 import {
   ContextRecord,
@@ -41,7 +41,7 @@ export const backendService = async (identity?: any) => {
     }
   }
 
-  const actor = await createBackendActor(identityToUse);
+  const actor = await createMeroDocsRegistryActor(identityToUse);
 
   return {
     raw: {
