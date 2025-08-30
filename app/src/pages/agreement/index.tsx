@@ -455,13 +455,7 @@ const AgreementPage: React.FC = () => {
         setError(`Upload error: ${error}`);
       }
     },
-    [
-      app,
-      currentContextId,
-      loadDocuments,
-      showNotification,
-      clientApiService,
-    ],
+    [app, currentContextId, loadDocuments, showNotification, clientApiService],
   );
 
   const handleUploadClick = useCallback(() => {
