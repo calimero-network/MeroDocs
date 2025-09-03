@@ -85,6 +85,8 @@ pub struct DocumentInfo {
     #[serde(serialize_with = "serialize_blob_id_bytes")]
     pub pdf_blob_id: [u8; 32],
     pub size: u64,
+    pub embeddings: Option<Vec<f32>>,
+    pub extracted_text: Option<String>,
 }
 
 /// Document status tracking
@@ -497,6 +499,8 @@ impl MeroDocsState {
         hash: String,
         pdf_blob_id_str: String,
         file_size: u64,
+        embeddings: Option<Vec<f32>>,
+        extracted_text: Option<String>,
     ) -> Result<String, String> {
         let document_id = format!("doc_{}_{}", env::time_now(), name);
 
@@ -526,6 +530,8 @@ impl MeroDocsState {
             status: DocumentStatus::Pending,
             pdf_blob_id: pdf_blob_id_bytes,
             size: file_size,
+            embeddings,
+            extracted_text,
         };
 
         self.documents
@@ -906,5 +912,54 @@ impl MeroDocsState {
         } else {
             Err("Cannot resolve private identity from shared context".to_string())
         }
+    }
+
+    pub fn search_documents_by_embedding(
+        &self,
+        query_embedding: Vec<f32>,
+    ) -> Result<String, String> {
+        let mut similarities: Vec<(String, f32)> = Vec::new();
+
+        if let Ok(entries) = self.documents.entries() {
+            for (_, document) in entries {
+                if let Some(ref doc_embedding) = document.embeddings {
+                    if doc_embedding.len() == query_embedding.len() {
+                        let similarity = cosine_similarity(&query_embedding, doc_embedding);
+                        similarities.push((document.id.clone(), similarity));
+                    }
+                }
+            }
+        }
+
+        if similarities.is_empty() {
+            return Err("No documents with embeddings found".to_string());
+        }
+
+        similarities.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        let top_docs = similarities.into_iter().take(5);
+
+        let mut context = String::new();
+        for (doc_id, similarity) in top_docs {
+            if let Ok(Some(doc)) = self.documents.get(&doc_id) {
+                let text = doc.extracted_text.as_ref().unwrap_or(&doc.name);
+                context.push_str(&format!(
+                    "Document: {} (Similarity: {:.4})\n{}\n\n",
+                    doc.name, similarity, text
+                ));
+            }
+        }
+
+        Ok(context)
+    }
+}
+
+fn cosine_similarity(a: &Vec<f32>, b: &Vec<f32>) -> f32 {
+    let dot_product: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
+    let norm_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
+    let norm_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
+    if norm_a == 0.0 || norm_b == 0.0 {
+        0.0
+    } else {
+        dot_product / (norm_a * norm_b)
     }
 }

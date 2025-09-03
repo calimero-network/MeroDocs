@@ -2,6 +2,7 @@ import { ClientApiDataSource } from './dataSource/ClientApiDataSource';
 import { DocumentInfo, Document } from './clientApi';
 import { blobClient } from '@calimero-network/calimero-client';
 import { backendService } from './icp/backendService';
+import { processPDFAndGenerateEmbeddings } from '../services/embeddingService';
 
 export class DocumentService {
   private clientApi: ClientApiDataSource;
@@ -40,13 +41,28 @@ export class DocumentService {
       const pdfData = new Uint8Array(arrayBuffer);
       const hash = await this.calculateFileHash(pdfData);
 
-      // Register the document with the backend using the blob ID
+      let embeddings: number[] | undefined;
+      let extractedText: string | undefined;
+      try {
+        const { text, embeddings: generatedEmbeddings } =
+          await processPDFAndGenerateEmbeddings(file);
+        extractedText = text;
+        embeddings = generatedEmbeddings;
+      } catch (embeddingError) {
+        console.warn(
+          'Embedding generation failed, proceeding without embeddings:',
+          embeddingError,
+        );
+      }
+
       const response = await this.clientApi.uploadDocument(
         contextId,
         name,
         hash,
         blobResponse.data.blobId,
         file.size,
+        embeddings, // Pass generated embeddings
+        extractedText, // Pass extracted text
         agreementContextID,
         agreementContextUserID,
       );
@@ -206,6 +222,31 @@ export class DocumentService {
         verified: false,
         message: 'Verification failed due to an error.',
       };
+    }
+  }
+
+  async searchDocumentsByEmbedding(
+    queryEmbedding: number[],
+    agreementContextID?: string,
+    agreementContextUserID?: string,
+  ): Promise<{ data?: string; error?: any }> {
+    try {
+      const response = await this.clientApi.searchDocumentsByEmbedding(
+        queryEmbedding,
+        agreementContextID,
+        agreementContextUserID,
+      );
+
+      return {
+        data: response.data || undefined,
+        error: response.error,
+      };
+    } catch (error) {
+      console.error(
+        'DocumentService: Error in searchDocumentsByEmbedding:',
+        error,
+      );
+      return { error: { message: `Search error: ${error}` } };
     }
   }
 

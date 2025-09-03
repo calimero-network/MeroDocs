@@ -22,6 +22,7 @@ export enum ClientMethod {
   SET_CONSENT = 'set_consent',
   HAS_CONSENTED = 'has_consented',
   IS_DEFAULT_PRIVATE_CONTEXT = 'is_default_private_context',
+  SEARCH_DOCUMENTS_BY_EMBEDDING = 'search_documents_by_embedding', // New: For similarity search
 }
 
 export interface SignatureRecord {
@@ -86,6 +87,8 @@ export interface DocumentInfo {
   status: DocumentStatus;
   pdf_blob_id: string;
   size: number;
+  embeddings?: number[]; // New: Vector embeddings from frontend
+  extracted_text?: string; // New: Extracted text from PDF
 }
 
 export interface Document {
@@ -98,6 +101,8 @@ export interface Document {
   hash: string;
   pdfBlobId: string;
   file?: File;
+  embeddings?: number[]; // New: Optional for consistency
+  extractedText?: string; // New: Optional for consistency
 }
 
 export interface Agreement {
@@ -139,6 +144,8 @@ export interface ClientApi {
     hash: string,
     pdfBlobIdStr: string,
     fileSize: number,
+    embeddings?: number[], // New: Embeddings from frontend
+    extractedText?: string, // New: Extracted text from frontend
     agreementContextID?: string,
     agreementContextUserID?: string,
   ): ApiResponse<string>;
@@ -183,4 +190,9 @@ export interface ClientApi {
     agreementContextUserID?: string,
   ): ApiResponse<boolean>;
   isDefaultPrivateContext(): ApiResponse<boolean>;
+  searchDocumentsByEmbedding( // New: Method for similarity search
+    queryEmbedding: number[],
+    agreementContextID?: string,
+    agreementContextUserID?: string,
+  ): ApiResponse<string>;
 }
