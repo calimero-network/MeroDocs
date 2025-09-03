@@ -22,7 +22,7 @@ async fn get_rag_response(prompt: String, context: String, history: Vec<ChatMess
         ---
         CONTEXT:
         {}
-        ---"#,``
+        ---"#,
         context
     );
 
