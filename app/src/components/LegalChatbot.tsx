@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from './ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, X, MessageSquare } from 'lucide-react';
+import { Send, X } from 'lucide-react';
 import { generateEmbeddings } from '../services/embeddingService';
 import { DocumentService } from '../api/documentService';
 import { LoadingSpinner } from './ui/Loading';
+import { llmChatbotService } from '../api/icp/backendService';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface Message {
   id: string;
@@ -16,7 +18,7 @@ interface Message {
 interface LegalChatbotProps {
   isOpen: boolean;
   onClose: () => void;
-  contextId?: string; // For backend calls
+  contextId?: string;
   agreementContextID?: string;
   agreementContextUserID?: string;
 }
@@ -24,10 +26,13 @@ interface LegalChatbotProps {
 const LegalChatbot: React.FC<LegalChatbotProps> = ({
   isOpen,
   onClose,
-  contextId,
   agreementContextID,
   agreementContextUserID,
 }) => {
+  const { mode } = useTheme();
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const documentService = new DocumentService();
+
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -38,8 +43,6 @@ const LegalChatbot: React.FC<LegalChatbotProps> = ({
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const documentService = new DocumentService();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -49,143 +52,252 @@ const LegalChatbot: React.FC<LegalChatbotProps> = ({
     scrollToBottom();
   }, [messages]);
 
+  const estimateRequestSize = (
+    prompt: string,
+    context: string,
+    history: any[],
+  ) => {
+    const historySize = history.reduce((acc, msg) => {
+      if (msg.user?.content) acc += msg.user.content.length;
+      if (msg.assistant?.content?.[0]) acc += msg.assistant.content[0].length;
+      return acc;
+    }, 0);
+    return prompt.length + context.length + historySize;
+  };
+
+  const addMessage = (text: string, sender: 'user' | 'bot') => {
+    const message: Message = {
+      id: Date.now().toString(),
+      text,
+      sender,
+      timestamp: new Date(),
+    };
+    setMessages((prev) => [...prev, message]);
+    return message;
+  };
+
   const handleSend = async () => {
     if (!input.trim()) return;
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      text: input,
-      sender: 'user',
-      timestamp: new Date(),
-    };
-    setMessages((prev) => [...prev, userMessage]);
+    addMessage(input, 'user');
+    const userInput = input;
     setInput('');
     setIsLoading(true);
 
     try {
-      // Generate embeddings for the query
-      const queryEmbeddings = await generateEmbeddings(input);
-
-      // Call the search API
-      const response = await documentService.searchDocumentsByEmbedding(
+      // Get embeddings and search documents
+      const queryEmbeddings = await generateEmbeddings(userInput);
+      const searchResponse = await documentService.searchDocumentsByEmbedding(
         queryEmbeddings,
         agreementContextID,
         agreementContextUserID,
       );
 
-      let botResponse =
-        "Sorry, I couldn't find relevant information in the document.";
-      if (response.data) {
-        botResponse = `Based on the document:\n\n${response.data}`;
-      } else if (response.error) {
-        botResponse = `Error: ${response.error.message}`;
+      // Process context with size limit
+      const maxContextLength = 2000;
+      let context = '';
+      if (searchResponse.data) {
+        context =
+          searchResponse.data.length > maxContextLength
+            ? searchResponse.data.substring(0, maxContextLength) + '...'
+            : searchResponse.data;
+      } else if (searchResponse.error) {
+        context = `Error: ${searchResponse.error.message}`;
+      } else {
+        context = 'No context found.';
       }
 
-      const botMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: botResponse,
-        sender: 'bot',
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, botMessage]);
+      // Prepare limited history
+      const limitedHistory = messages.slice(-1).map((msg) => {
+        const truncatedText = msg.text.substring(0, 100);
+        return msg.sender === 'user'
+          ? { user: { content: truncatedText } }
+          : { assistant: { content: [truncatedText], tool_calls: [] } };
+      });
+
+      // Check request size
+      const estimatedSize = estimateRequestSize(
+        userInput,
+        context,
+        limitedHistory,
+      );
+      if (estimatedSize > 3000) {
+        addMessage(
+          'Your question is too complex. Please ask a shorter, more specific question.',
+          'bot',
+        );
+        return;
+      }
+
+      // Get LLM response with timeout
+      const llmService = await llmChatbotService();
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Request timeout')), 60000),
+      );
+
+      const llmResponse = (await Promise.race([
+        llmService.getRagResponse(userInput, context, limitedHistory),
+        timeoutPromise,
+      ])) as string;
+
+      // Parse response
+      let responseText = llmResponse;
+      try {
+        const parsedResponse = JSON.parse(llmResponse);
+        responseText = parsedResponse.answer || llmResponse;
+      } catch (error) {
+        console.error('Failed to parse LLM response as JSON:', error);
+      }
+
+      addMessage(responseText, 'bot');
     } catch (error) {
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: 'An error occurred while processing your query. Please try again.',
-        sender: 'bot',
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
+      console.error('Error processing message:', error);
+
+      let errorText = 'An error occurred while processing your query.';
+      if (error instanceof Error) {
+        if (
+          error.message.includes('timeout') ||
+          error.message.includes('Request timeout')
+        ) {
+          errorText =
+            'The request took too long. Please try a simpler question.';
+        } else if (error.message.includes('exceed')) {
+          errorText =
+            'Your question is too long. Please ask a shorter question.';
+        }
+      }
+
+      addMessage(errorText, 'bot');
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
       handleSend();
     }
   };
 
+  if (!isOpen) return null;
+
   return (
     <AnimatePresence>
-      {isOpen && (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className={`fixed inset-0 backdrop-blur-sm flex items-center justify-center p-4 z-[10000] ${
+          mode === 'dark' ? 'bg-black/50' : 'bg-black/30'
+        }`}
+      >
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[10000]"
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.9, opacity: 0 }}
+          className={`rounded-lg shadow-2xl w-full max-w-md h-[600px] flex flex-col ${
+            mode === 'dark'
+              ? 'bg-gray-900 border border-gray-700'
+              : 'bg-white border border-gray-200'
+          }`}
         >
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.9, opacity: 0 }}
-            className="bg-white dark:bg-gray-900 rounded-lg shadow-2xl w-full max-w-md h-[600px] flex flex-col"
+          {/* Header */}
+          <div
+            className={`flex items-center justify-between p-4 border-b ${
+              mode === 'dark' ? 'border-gray-700' : 'border-gray-200'
+            }`}
           >
-            {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Legal Assistant
-              </h3>
-              <Button variant="ghost" size="sm" onClick={onClose}>
-                <X size={20} />
-              </Button>
-            </div>
+            <h3
+              className={`text-lg font-semibold ${
+                mode === 'dark' ? 'text-white' : 'text-gray-900'
+              }`}
+            >
+              Legal Assistant
+            </h3>
+            <Button variant="ghost" size="sm" onClick={onClose}>
+              <X size={20} />
+            </Button>
+          </div>
 
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {messages.map((msg) => (
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {messages.map((msg) => (
+              <div
+                key={msg.id}
+                className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
                 <div
-                  key={msg.id}
-                  className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                  className={`max-w-xs px-4 py-2 rounded-lg ${
+                    msg.sender === 'user'
+                      ? 'bg-blue-500 text-white'
+                      : mode === 'dark'
+                        ? 'bg-gray-700 text-white'
+                        : 'bg-gray-200 text-gray-900'
+                  }`}
                 >
-                  <div
-                    className={`max-w-xs px-4 py-2 rounded-lg ${
-                      msg.sender === 'user'
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white'
+                  <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
+                  <p
+                    className={`text-xs opacity-70 mt-1 ${
+                      mode === 'dark' ? 'text-gray-300' : 'text-gray-600'
                     }`}
                   >
-                    <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
-                    <p className="text-xs opacity-70 mt-1">
-                      {msg.timestamp.toLocaleTimeString()}
-                    </p>
-                  </div>
+                    {msg.timestamp.toLocaleTimeString()}
+                  </p>
                 </div>
-              ))}
-              {isLoading && (
-                <div className="flex justify-start">
-                  <div className="bg-gray-200 dark:bg-gray-700 px-4 py-2 rounded-lg">
-                    <LoadingSpinner size="sm" />
-                  </div>
-                </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-
-            {/* Input */}
-            <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-              <div className="flex space-x-2">
-                <input
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder="Ask a legal question about the document..."
-                  className="flex-1 px-4 py-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
-                  disabled={isLoading}
-                  type="text"
-                />
-                <Button
-                  onClick={handleSend}
-                  disabled={isLoading || !input.trim()}
-                >
-                  <Send size={20} />
-                </Button>
               </div>
+            ))}
+
+            {isLoading && (
+              <div className="flex justify-start">
+                <div
+                  className={`px-4 py-2 rounded-lg ${
+                    mode === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                  }`}
+                >
+                  <LoadingSpinner size="sm" />
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Input */}
+          <div
+            className={`p-4 border-t ${
+              mode === 'dark' ? 'border-gray-700' : 'border-gray-200'
+            }`}
+          >
+            <div className="flex space-x-2">
+              <input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Ask a legal question about the document..."
+                className={`flex-1 px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  mode === 'dark'
+                    ? 'border-gray-700 bg-gray-800 text-white placeholder-gray-400'
+                    : 'border-gray-300 bg-white text-gray-900 placeholder-gray-500'
+                }`}
+                disabled={isLoading}
+                type="text"
+              />
+              <Button
+                onClick={handleSend}
+                disabled={isLoading || !input.trim()}
+                className={`rounded-full shadow-lg hover:shadow-xl transition-all duration-300 ${
+                  mode === 'dark'
+                    ? 'bg-green-600 hover:bg-green-700 text-white'
+                    : 'bg-green-500 hover:bg-green-600 text-white'
+                }`}
+                size="lg"
+              >
+                <Send className="w-5 h-5" />
+              </Button>
             </div>
-          </motion.div>
+          </div>
         </motion.div>
-      )}
+      </motion.div>
     </AnimatePresence>
   );
 };

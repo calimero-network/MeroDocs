@@ -363,11 +363,10 @@ const AgreementPage: React.FC = () => {
       ]);
 
       try {
-
         const response = await documentService.uploadDocument(
           currentContextId,
           file.name,
-          file, 
+          file,
           agreementContextID || undefined,
           agreementContextUserID || undefined,
           (progress: number) => {
@@ -392,7 +391,7 @@ const AgreementPage: React.FC = () => {
           console.error(`Failed to upload ${file.name}:`, response.error);
           return;
         }
- 
+
         setUploadFiles((prev) =>
           prev.map((f) =>
             f.file && f.file.name === file.name

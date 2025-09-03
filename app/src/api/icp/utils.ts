@@ -78,7 +78,7 @@ export const dateToBigint = (date: Date): bigint => {
  */
 export const validateEnvironment = (): void => {
   const network = import.meta.env.VITE_DFX_NETWORK;
-  const registryCanisterId = import.meta.env.VITE_BACKEND_CANISTER_ID; // Renamed for clarity: MeroDocs Registry
+  const registryCanisterId = import.meta.env.VITE_MERODOCS_REGISTRY_CANISTER_ID;
   const llmChatbotCanisterId = import.meta.env.VITE_LLM_CHATBOT_CANISTER_ID;
 
   if (!network) {
@@ -107,7 +107,7 @@ export const validateEnvironment = (): void => {
  */
 export const getNetworkConfig = () => {
   const network = import.meta.env.VITE_DFX_NETWORK || 'local';
-  const registryCanisterId = import.meta.env.VITE_BACKEND_CANISTER_ID; // MeroDocs Registry
+  const registryCanisterId = import.meta.env.VITE_MERODOCS_REGISTRY_CANISTER_ID; // MeroDocs Registry
   const llmChatbotCanisterId = import.meta.env.VITE_LLM_CHATBOT_CANISTER_ID;
   const isMainnet = network === 'ic';
 
