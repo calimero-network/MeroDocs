@@ -2,12 +2,31 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Button } from './ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, X } from 'lucide-react';
-import { generateEmbeddings } from '../services/embeddingService';
+import { generateQueryEmbedding } from '../services/embeddingService';
 import { DocumentService } from '../api/documentService';
 import { LoadingSpinner } from './ui/Loading';
 import { llmChatbotService } from '../api/icp/backendService';
 import { useTheme } from '../contexts/ThemeContext';
 
+// Constants
+const CHAT_CONFIG = {
+  DEFAULT_CONTEXT_LIMIT: 800,
+  AGGRESSIVE_CONTEXT_LIMIT: 400,
+  MAX_REQUEST_SIZE: 1500,
+  FALLBACK_REQUEST_SIZE: 1000,
+  HISTORY_TRUNCATE_LENGTH: 80,
+  REQUEST_TIMEOUT: 30000,
+} as const;
+
+const ERROR_MESSAGES = {
+  TIMEOUT: 'The request took too long. Please try a simpler, shorter question.',
+  TOO_COMPLEX:
+    'Your question is too complex. Please ask a shorter, more focused question.',
+  NETWORK: 'Network error. Please check your connection and try again.',
+  DEFAULT: 'An error occurred while processing your query.',
+} as const;
+
+// Types
 interface Message {
   id: string;
   text: string;
@@ -19,6 +38,7 @@ interface LegalChatbotProps {
   isOpen: boolean;
   onClose: () => void;
   contextId?: string;
+  documentID: string;
   agreementContextID?: string;
   agreementContextUserID?: string;
 }
@@ -26,6 +46,7 @@ interface LegalChatbotProps {
 const LegalChatbot: React.FC<LegalChatbotProps> = ({
   isOpen,
   onClose,
+  documentID,
   agreementContextID,
   agreementContextUserID,
 }) => {
@@ -44,19 +65,25 @@ const LegalChatbot: React.FC<LegalChatbotProps> = ({
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  const addMessage = (text: string, sender: 'user' | 'bot') => {
+    const newMessage: Message = {
+      id: Date.now().toString(),
+      text,
+      sender,
+      timestamp: new Date(),
+    };
+    setMessages((prev) => [...prev, newMessage]);
+  };
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
 
   const estimateRequestSize = (
     prompt: string,
     context: string,
     history: any[],
-  ) => {
+  ): number => {
     const historySize = history.reduce((acc, msg) => {
       if (msg.user?.content) acc += msg.user.content.length;
       if (msg.assistant?.content?.[0]) acc += msg.assistant.content[0].length;
@@ -65,16 +92,45 @@ const LegalChatbot: React.FC<LegalChatbotProps> = ({
     return prompt.length + context.length + historySize;
   };
 
-  const addMessage = (text: string, sender: 'user' | 'bot') => {
-    const message: Message = {
-      id: Date.now().toString(),
-      text,
-      sender,
-      timestamp: new Date(),
-    };
-    setMessages((prev) => [...prev, message]);
-    return message;
+  const trimContextAggressively = (
+    context: string,
+    maxLength: number = CHAT_CONFIG.DEFAULT_CONTEXT_LIMIT,
+  ): string => {
+    if (context.length <= maxLength) return context;
+
+    const sentences = context.split(/[.!?]\s+/);
+    let trimmedContext = '';
+
+    for (const sentence of sentences) {
+      if (trimmedContext.length + sentence.length + 2 <= maxLength) {
+        trimmedContext += (trimmedContext ? '. ' : '') + sentence;
+      } else {
+        break;
+      }
+    }
+
+    return trimmedContext || context.substring(0, maxLength - 3) + '...';
   };
+
+  const getErrorMessage = (error: Error): string => {
+    const { message } = error;
+
+    if (message.includes('timeout') || message.includes('Request timeout')) {
+      return ERROR_MESSAGES.TIMEOUT;
+    }
+    if (message.includes('exceed') || message.includes('too large')) {
+      return ERROR_MESSAGES.TOO_COMPLEX;
+    }
+    if (message.includes('network') || message.includes('connection')) {
+      return ERROR_MESSAGES.NETWORK;
+    }
+
+    return ERROR_MESSAGES.DEFAULT;
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   const handleSend = async () => {
     if (!input.trim()) return;
@@ -85,54 +141,62 @@ const LegalChatbot: React.FC<LegalChatbotProps> = ({
     setIsLoading(true);
 
     try {
-      // Get embeddings and search documents
-      const queryEmbeddings = await generateEmbeddings(userInput);
-      const searchResponse = await documentService.searchDocumentsByEmbedding(
+      const queryEmbeddings = await generateQueryEmbedding(userInput);
+      const searchResponse = await documentService.searchDocumentByEmbedding(
         queryEmbeddings,
+        documentID,
         agreementContextID,
         agreementContextUserID,
       );
 
-      // Process context with size limit
-      const maxContextLength = 2000;
       let context = '';
       if (searchResponse.data) {
-        context =
-          searchResponse.data.length > maxContextLength
-            ? searchResponse.data.substring(0, maxContextLength) + '...'
-            : searchResponse.data;
-      } else if (searchResponse.error) {
-        context = `Error: ${searchResponse.error.message}`;
+        context = trimContextAggressively(searchResponse.data);
       } else {
-        context = 'No context found.';
+        context = searchResponse.error
+          ? `Error: ${searchResponse.error.message}`
+          : 'No context found.';
       }
 
-      // Prepare limited history
+      // Prepare limited conversation history
       const limitedHistory = messages.slice(-1).map((msg) => {
-        const truncatedText = msg.text.substring(0, 100);
+        const truncatedText = msg.text.substring(
+          0,
+          CHAT_CONFIG.HISTORY_TRUNCATE_LENGTH,
+        );
         return msg.sender === 'user'
           ? { user: { content: truncatedText } }
           : { assistant: { content: [truncatedText], tool_calls: [] } };
       });
 
-      // Check request size
-      const estimatedSize = estimateRequestSize(
+      // Check and optimize request size
+      let estimatedSize = estimateRequestSize(
         userInput,
         context,
         limitedHistory,
       );
-      if (estimatedSize > 3000) {
-        addMessage(
-          'Your question is too complex. Please ask a shorter, more specific question.',
-          'bot',
+
+      if (estimatedSize > CHAT_CONFIG.MAX_REQUEST_SIZE) {
+        context = trimContextAggressively(
+          context,
+          CHAT_CONFIG.AGGRESSIVE_CONTEXT_LIMIT,
         );
-        return;
+        estimatedSize = estimateRequestSize(userInput, context, []);
+
+        if (estimatedSize > CHAT_CONFIG.FALLBACK_REQUEST_SIZE) {
+          addMessage(ERROR_MESSAGES.TOO_COMPLEX, 'bot');
+          return;
+        }
+
+        limitedHistory.length = 0; // Clear history for oversized requests
       }
 
-      // Get LLM response with timeout
       const llmService = await llmChatbotService();
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Request timeout')), 60000),
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error('Request timeout')),
+          CHAT_CONFIG.REQUEST_TIMEOUT,
+        ),
       );
 
       const llmResponse = (await Promise.race([
@@ -140,34 +204,20 @@ const LegalChatbot: React.FC<LegalChatbotProps> = ({
         timeoutPromise,
       ])) as string;
 
-      // Parse response
       let responseText = llmResponse;
       try {
         const parsedResponse = JSON.parse(llmResponse);
         responseText = parsedResponse.answer || llmResponse;
-      } catch (error) {
-        console.error('Failed to parse LLM response as JSON:', error);
-      }
+      } catch {}
 
       addMessage(responseText, 'bot');
     } catch (error) {
       console.error('Error processing message:', error);
-
-      let errorText = 'An error occurred while processing your query.';
-      if (error instanceof Error) {
-        if (
-          error.message.includes('timeout') ||
-          error.message.includes('Request timeout')
-        ) {
-          errorText =
-            'The request took too long. Please try a simpler question.';
-        } else if (error.message.includes('exceed')) {
-          errorText =
-            'Your question is too long. Please ask a shorter question.';
-        }
-      }
-
-      addMessage(errorText, 'bot');
+      const errorMessage =
+        error instanceof Error
+          ? getErrorMessage(error)
+          : ERROR_MESSAGES.DEFAULT;
+      addMessage(errorMessage, 'bot');
     } finally {
       setIsLoading(false);
     }
@@ -179,6 +229,32 @@ const LegalChatbot: React.FC<LegalChatbotProps> = ({
       handleSend();
     }
   };
+
+  const renderMessage = (msg: Message) => (
+    <div
+      key={msg.id}
+      className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+    >
+      <div
+        className={`max-w-xs px-4 py-2 rounded-lg ${
+          msg.sender === 'user'
+            ? 'bg-blue-500 text-white'
+            : mode === 'dark'
+              ? 'bg-gray-700 text-white'
+              : 'bg-gray-200 text-gray-900'
+        }`}
+      >
+        <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
+        <p
+          className={`text-xs opacity-70 mt-1 ${
+            mode === 'dark' ? 'text-gray-300' : 'text-gray-600'
+          }`}
+        >
+          {msg.timestamp.toLocaleTimeString()}
+        </p>
+      </div>
+    </div>
+  );
 
   if (!isOpen) return null;
 
@@ -222,31 +298,7 @@ const LegalChatbot: React.FC<LegalChatbotProps> = ({
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div
-                  className={`max-w-xs px-4 py-2 rounded-lg ${
-                    msg.sender === 'user'
-                      ? 'bg-blue-500 text-white'
-                      : mode === 'dark'
-                        ? 'bg-gray-700 text-white'
-                        : 'bg-gray-200 text-gray-900'
-                  }`}
-                >
-                  <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
-                  <p
-                    className={`text-xs opacity-70 mt-1 ${
-                      mode === 'dark' ? 'text-gray-300' : 'text-gray-600'
-                    }`}
-                  >
-                    {msg.timestamp.toLocaleTimeString()}
-                  </p>
-                </div>
-              </div>
-            ))}
+            {messages.map(renderMessage)}
 
             {isLoading && (
               <div className="flex justify-start">

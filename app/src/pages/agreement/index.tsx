@@ -74,6 +74,8 @@ interface FileUpload {
   uploaded: boolean;
   error?: string;
   blob_id?: string;
+  stage: 'uploading' | 'generating-embeddings' | 'storing' | 'complete';
+  stageProgress: number;
 }
 
 type NotificationType = 'success' | 'error';
@@ -138,7 +140,21 @@ const generateInvitePayload = async (
   }
 };
 
-// Helper functions
+const getStageDescription = (stage: FileUpload['stage']): string => {
+  switch (stage) {
+    case 'uploading':
+      return 'Uploading file...';
+    case 'generating-embeddings':
+      return 'Generating embeddings...';
+    case 'storing':
+      return 'Storing document...';
+    case 'complete':
+      return 'Complete';
+    default:
+      return 'Processing...';
+  }
+};
+
 const calculateFileHash = async (data: Uint8Array): Promise<string> => {
   const buffer = new Uint8Array(data);
   const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
@@ -359,6 +375,8 @@ const AgreementPage: React.FC = () => {
           uploaded: false,
           error: undefined,
           blob_id: undefined,
+          stage: 'uploading',
+          stageProgress: 0,
         },
       ]);
 
@@ -369,10 +387,49 @@ const AgreementPage: React.FC = () => {
           file,
           agreementContextID || undefined,
           agreementContextUserID || undefined,
-          (progress: number) => {
+          (blobProgress: number) => {
+            const totalProgress = Math.min(blobProgress * 0.5, 50);
             setUploadFiles((prev) =>
               prev.map((f) =>
-                f.file && f.file.name === file.name ? { ...f, progress } : f,
+                f.file && f.file.name === file.name
+                  ? {
+                      ...f,
+                      progress: totalProgress,
+                      stageProgress: blobProgress,
+                      stage: 'uploading' as const,
+                    }
+                  : f,
+              ),
+            );
+          },
+
+          (embeddingProgress: number) => {
+            const totalProgress = 50 + Math.min(embeddingProgress * 0.3, 30);
+            setUploadFiles((prev) =>
+              prev.map((f) =>
+                f.file && f.file.name === file.name
+                  ? {
+                      ...f,
+                      progress: totalProgress,
+                      stageProgress: embeddingProgress,
+                      stage: 'generating-embeddings' as const,
+                    }
+                  : f,
+              ),
+            );
+          },
+
+          () => {
+            setUploadFiles((prev) =>
+              prev.map((f) =>
+                f.file && f.file.name === file.name
+                  ? {
+                      ...f,
+                      progress: 85,
+                      stageProgress: 50,
+                      stage: 'storing' as const,
+                    }
+                  : f,
               ),
             );
           },
@@ -382,7 +439,13 @@ const AgreementPage: React.FC = () => {
           setUploadFiles((prev) =>
             prev.map((f) =>
               f.file && f.file.name === file.name
-                ? { ...f, uploading: false, error: response.error.message }
+                ? {
+                    ...f,
+                    uploading: false,
+                    error: response.error.message,
+                    stage: 'complete' as const,
+                    stageProgress: 0,
+                  }
                 : f,
             ),
           );
@@ -400,6 +463,8 @@ const AgreementPage: React.FC = () => {
                   uploading: false,
                   uploaded: true,
                   progress: 100,
+                  stage: 'complete' as const,
+                  stageProgress: 100,
                 }
               : f,
           ),
@@ -418,6 +483,8 @@ const AgreementPage: React.FC = () => {
             ...f,
             uploading: false,
             error: `Upload error: ${error}`,
+            stage: 'complete' as const,
+            stageProgress: 0,
           })),
         );
         setUploading(false);
@@ -1286,7 +1353,7 @@ const AgreementPage: React.FC = () => {
                             ? 'Complete'
                             : fileUpload.error
                               ? 'Error'
-                              : `${Math.round(fileUpload.progress)}%`}
+                              : `${getStageDescription(fileUpload.stage)} - ${Math.round(fileUpload.progress)}%`}
                         </span>
                       </div>
                       <div className="w-full bg-muted rounded-full h-2">
@@ -1299,7 +1366,7 @@ const AgreementPage: React.FC = () => {
                                 : 'bg-primary'
                           }`}
                           style={{
-                            width: `${fileUpload.uploaded ? 100 : fileUpload.progress}%`,
+                            width: `${fileUpload.uploaded ? 100 : fileUpload.stageProgress ?? fileUpload.progress}%`,
                           }}
                         />
                       </div>

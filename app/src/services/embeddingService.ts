@@ -2,23 +2,37 @@
 import * as tf from '@tensorflow/tfjs';
 import * as use from '@tensorflow-models/universal-sentence-encoder';
 import * as pdfjsLib from 'pdfjs-dist';
-import { Buffer } from 'buffer';
 
 // Set the worker source for pdfjs-dist (required for browser)
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
-// Global variable to cache the model (avoids reloading)
+const CONFIG = {
+  MAX_CHUNK_SIZE: 400,
+  MIN_SENTENCE_LENGTH: 20,
+  CHUNK_PROCESSING_DELAY: 100,
+  EMBEDDING_LOG_PREVIEW_LENGTH: 100,
+} as const;
+
+export interface DocumentChunk {
+  text: string;
+  embedding: number[];
+  start_position: number;
+  end_position: number;
+}
+
+export interface ProcessedDocument {
+  text: string;
+  fullTextEmbedding: number[];
+  chunks: DocumentChunk[];
+}
+
 let embeddingModel: use.UniversalSentenceEncoder | null = null;
 
-// Load the embedding model (Universal Sentence Encoder)
-async function loadEmbeddingModel() {
+async function loadEmbeddingModel(): Promise<use.UniversalSentenceEncoder> {
   if (!embeddingModel) {
     try {
-      // Set TensorFlow.js backend (WebGL for GPU acceleration, fallback to CPU)
       await tf.setBackend('webgl');
       await tf.ready();
-      console.log('TensorFlow.js backend:', tf.getBackend());
-
       embeddingModel = await use.load();
     } catch (error) {
       console.error('Error loading embedding model:', error);
@@ -28,7 +42,59 @@ async function loadEmbeddingModel() {
   return embeddingModel;
 }
 
-// Extract text from PDF (using pdfjs-dist for browser compatibility)
+function sanitizeText(text: string): string {
+  if (!text || typeof text !== 'string') {
+    throw new Error('Text must be a non-empty string');
+  }
+
+  const sanitized = text.trim().replace(/\0/g, '');
+  if (!sanitized) {
+    throw new Error('Text is empty after sanitization');
+  }
+
+  return sanitized;
+}
+
+function splitTextIntoChunks(
+  text: string,
+  maxChunkSize: number = CONFIG.MAX_CHUNK_SIZE,
+): string[] {
+  const sentences = text
+    .split(/[.!?]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > CONFIG.MIN_SENTENCE_LENGTH);
+
+  if (sentences.length === 0) {
+    return text.length > maxChunkSize
+      ? [text.substring(0, maxChunkSize)]
+      : [text];
+  }
+
+  const chunks: string[] = [];
+  let currentChunk = '';
+
+  for (const sentence of sentences) {
+    const wouldExceedLimit =
+      currentChunk.length + sentence.length + 2 > maxChunkSize;
+    const hasExistingContent = currentChunk.length > 0;
+
+    if (wouldExceedLimit && hasExistingContent) {
+      chunks.push(currentChunk.trim());
+      currentChunk = sentence;
+    } else {
+      currentChunk += (hasExistingContent ? '. ' : '') + sentence;
+    }
+  }
+
+  if (currentChunk.trim().length > 0) {
+    chunks.push(currentChunk.trim());
+  }
+
+  return chunks.length > 0
+    ? chunks
+    : [text.substring(0, Math.min(text.length, maxChunkSize))];
+}
+
 export async function extractTextFromPDF(pdfFile: File): Promise<string> {
   try {
     const arrayBuffer = await pdfFile.arrayBuffer();
@@ -49,48 +115,109 @@ export async function extractTextFromPDF(pdfFile: File): Promise<string> {
   }
 }
 
-// Generate embeddings from text
 export async function generateEmbeddings(text: string): Promise<number[]> {
   try {
-    if (!text || typeof text !== 'string' || text.trim() === '') {
-      throw new Error('Text must be a non-empty string');
-    }
-
-    // Sanitize text: trim and remove any null characters
-    const sanitizedText = text.trim().replace(/\0/g, '');
-    if (sanitizedText === '') {
-      throw new Error('Text is empty after sanitization');
-    }
-
-    console.log(
-      'Generating embeddings for text:',
-      sanitizedText.substring(0, 100) + '...',
-    ); // Log first 100 chars for debugging
+    const sanitized = sanitizeText(text);
 
     const model = await loadEmbeddingModel();
-    const embeddings = await model.embed([sanitizedText]);
-
-    console.log('Embeddings tensor:', embeddings); // Log tensor for debugging
+    const embeddings = await model.embed([sanitized]);
 
     if (!embeddings || embeddings.size === 0) {
       throw new Error('Embeddings are invalid or empty');
     }
 
-    // Convert tensor to array
     const dataArray = await embeddings.array();
     if (!Array.isArray(dataArray) || dataArray.length === 0) {
       throw new Error('Failed to convert embeddings to array');
     }
 
-    return dataArray[0] as number[]; // Return the first (and only) embedding
+    return dataArray[0] as number[];
   } catch (error) {
     console.error('Error generating embeddings:', error);
-    throw new Error('Failed to generate embeddings');
+    throw new Error(
+      `Failed to generate embeddings: ${error instanceof Error ? error.message : error}`,
+    );
   }
 }
 
-// Combined function: Extract text and generate embeddings
+export async function generateQueryEmbedding(query: string): Promise<number[]> {
+  if (!query?.trim()) {
+    throw new Error('Query cannot be empty');
+  }
+
+  return generateEmbeddings(query.trim());
+}
+
+export async function generateChunkedEmbeddings(text: string): Promise<{
+  fullTextEmbedding: number[];
+  chunks: DocumentChunk[];
+}> {
+  try {
+    if (!text?.trim()) {
+      throw new Error('Text is empty or invalid');
+    }
+
+    const [fullTextEmbedding, textChunks] = await Promise.all([
+      generateEmbeddings(text),
+      Promise.resolve(splitTextIntoChunks(text, CONFIG.MAX_CHUNK_SIZE)),
+    ]);
+
+    const chunks: DocumentChunk[] = [];
+    let currentPosition = 0;
+
+    for (let i = 0; i < textChunks.length; i++) {
+      const chunk = textChunks[i];
+
+      const chunkEmbedding = await generateEmbeddings(chunk);
+      const startPosition = currentPosition;
+      const endPosition = currentPosition + chunk.length;
+
+      chunks.push({
+        text: chunk,
+        embedding: chunkEmbedding,
+        start_position: startPosition,
+        end_position: endPosition,
+      });
+
+      currentPosition = endPosition + 1;
+
+      if (i < textChunks.length - 1) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, CONFIG.CHUNK_PROCESSING_DELAY),
+        );
+      }
+    }
+
+    return {
+      fullTextEmbedding,
+      chunks,
+    };
+  } catch (error) {
+    console.error('Error generating chunked embeddings:', error);
+    throw error;
+  }
+}
+
 export async function processPDFAndGenerateEmbeddings(
+  pdfFile: File,
+): Promise<ProcessedDocument> {
+  try {
+    const text = await extractTextFromPDF(pdfFile);
+
+    const { fullTextEmbedding, chunks } = await generateChunkedEmbeddings(text);
+
+    return {
+      text,
+      fullTextEmbedding,
+      chunks,
+    };
+  } catch (error) {
+    console.error('Error processing PDF and generating embeddings:', error);
+    throw error;
+  }
+}
+
+export async function processPDFAndGenerateEmbeddingsLegacy(
   pdfFile: File,
 ): Promise<{ text: string; embeddings: number[] }> {
   try {
@@ -99,6 +226,6 @@ export async function processPDFAndGenerateEmbeddings(
     return { text, embeddings };
   } catch (error) {
     console.error('Error processing PDF and generating embeddings:', error);
-    throw error; // Re-throw to propagate the error
+    throw error;
   }
 }

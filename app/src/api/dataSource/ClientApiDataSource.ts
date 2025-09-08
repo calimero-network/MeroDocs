@@ -950,6 +950,7 @@ export class ClientApiDataSource implements ClientApi {
     fileSize: number,
     embeddings?: number[],
     extractedText?: string,
+    chunks?: any[], // Add chunks parameter
     agreementContextID?: string,
     agreementContextUserID?: string,
   ): Promise<any> {
@@ -971,8 +972,9 @@ export class ClientApiDataSource implements ClientApi {
           hash,
           pdf_blob_id_str: pdfBlobIdStr,
           file_size: fileSize,
-          embeddings, // Include embeddings (optional)
-          extracted_text: extractedText, // Include extracted text (optional)
+          embeddings, 
+          extracted_text: extractedText, 
+          chunks, 
         },
       } as RpcQueryParams<any>);
 
@@ -1204,8 +1206,9 @@ export class ClientApiDataSource implements ClientApi {
     }
   }
 
-  async searchDocumentsByEmbedding(
+  async searchDocumentByEmbedding(
     queryEmbedding: number[],
+    documentId: string,
     agreementContextID?: string,
     agreementContextUserID?: string,
   ): ApiResponse<string> {
@@ -1220,9 +1223,10 @@ export class ClientApiDataSource implements ClientApi {
 
       const response = await rpcClient.execute({
         ...authConfig,
-        method: ClientMethod.SEARCH_DOCUMENTS_BY_EMBEDDING,
+        method: ClientMethod.SEARCH_DOCUMENT_BY_EMBEDDING,
         argsJson: {
-          query_embedding: queryEmbedding, // Send the query embedding
+          query_embedding: queryEmbedding,
+          document_id: documentId,
         },
       } as RpcQueryParams<any>);
 
@@ -1244,7 +1248,7 @@ export class ClientApiDataSource implements ClientApi {
       };
     } catch (error: any) {
       console.error(
-        'ClientApiDataSource: Error in searchDocumentsByEmbedding:',
+        'ClientApiDataSource: Error in searchDocumentByEmbedding:',
         error,
       );
       return {

@@ -1291,6 +1291,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
       <LegalChatbot
         isOpen={showChatbot}
         onClose={() => setShowChatbot(false)}
+        documentID={documentId!}
         contextId={contextId}
         agreementContextID={agreementContextID}
         agreementContextUserID={agreementContextUserID}

@@ -17,11 +17,17 @@ export class DocumentService {
     file: File,
     agreementContextID?: string,
     agreementContextUserID?: string,
-    onProgress?: (progress: number) => void,
+    onBlobProgress?: (progress: number) => void,
+    onEmbeddingProgress?: (progress: number) => void,
+    onStorageProgress?: () => void,
     icpIdentity?: any,
   ): Promise<{ data?: string; error?: any }> {
     try {
-      const blobResponse = await blobClient.uploadBlob(file, onProgress, '');
+      const blobResponse = await blobClient.uploadBlob(
+        file,
+        onBlobProgress,
+        '',
+      );
 
       if (blobResponse.error) {
         console.error(
@@ -43,17 +49,32 @@ export class DocumentService {
 
       let embeddings: number[] | undefined;
       let extractedText: string | undefined;
+      let chunks: any[] | undefined;
       try {
-        const { text, embeddings: generatedEmbeddings } =
-          await processPDFAndGenerateEmbeddings(file);
+        onEmbeddingProgress?.(0);
+
+        onEmbeddingProgress?.(20);
+        const {
+          text,
+          fullTextEmbedding,
+          chunks: documentChunks,
+        } = await processPDFAndGenerateEmbeddings(file);
+
+        onEmbeddingProgress?.(100);
+
         extractedText = text;
-        embeddings = generatedEmbeddings;
+        embeddings = fullTextEmbedding;
+        chunks = documentChunks;
       } catch (embeddingError) {
         console.warn(
           'Embedding generation failed, proceeding without embeddings:',
           embeddingError,
         );
+        onEmbeddingProgress?.(100);
       }
+
+      // Report start of storage
+      onStorageProgress?.();
 
       const response = await this.clientApi.uploadDocument(
         contextId,
@@ -61,8 +82,9 @@ export class DocumentService {
         hash,
         blobResponse.data.blobId,
         file.size,
-        embeddings, // Pass generated embeddings
-        extractedText, // Pass extracted text
+        embeddings,
+        extractedText,
+        chunks,
         agreementContextID,
         agreementContextUserID,
       );
@@ -113,7 +135,7 @@ export class DocumentService {
     agreementContextID?: string,
     agreementContextUserID?: string,
     onProgress?: (progress: number) => void,
-    icpIdentity?: any, // Pass ICP identity from outside
+    icpIdentity?: any,
   ): Promise<{ data?: void; error?: any }> {
     try {
       // Upload the new signed PDF via blob API
@@ -225,14 +247,16 @@ export class DocumentService {
     }
   }
 
-  async searchDocumentsByEmbedding(
+  async searchDocumentByEmbedding(
     queryEmbedding: number[],
+    documentId: string,
     agreementContextID?: string,
     agreementContextUserID?: string,
   ): Promise<{ data?: string; error?: any }> {
     try {
-      const response = await this.clientApi.searchDocumentsByEmbedding(
+      const response = await this.clientApi.searchDocumentByEmbedding(
         queryEmbedding,
+        documentId,
         agreementContextID,
         agreementContextUserID,
       );
