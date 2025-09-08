@@ -71,6 +71,17 @@ pub enum ParticipantRole {
     Unknown,
 }
 
+/// Document chunk with its embedding
+#[derive(Debug, Clone, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+#[borsh(crate = "calimero_sdk::borsh")]
+#[serde(crate = "calimero_sdk::serde")]
+pub struct DocumentChunk {
+    pub text: String,
+    pub embedding: Vec<f32>,
+    pub start_position: usize,
+    pub end_position: usize,
+}
+
 /// Document information
 #[derive(Debug, Clone, BorshSerialize, BorshDeserialize, Serialize)]
 #[borsh(crate = "calimero_sdk::borsh")]
@@ -87,6 +98,7 @@ pub struct DocumentInfo {
     pub size: u64,
     pub embeddings: Option<Vec<f32>>,
     pub extracted_text: Option<String>,
+    pub chunks: Option<Vec<DocumentChunk>>,
 }
 
 /// Document status tracking
@@ -501,6 +513,7 @@ impl MeroDocsState {
         file_size: u64,
         embeddings: Option<Vec<f32>>,
         extracted_text: Option<String>,
+        chunks: Option<Vec<DocumentChunk>>,
     ) -> Result<String, String> {
         let document_id = format!("doc_{}_{}", env::time_now(), name);
 
@@ -532,6 +545,7 @@ impl MeroDocsState {
             size: file_size,
             embeddings,
             extracted_text,
+            chunks,
         };
 
         self.documents
@@ -914,42 +928,134 @@ impl MeroDocsState {
         }
     }
 
-    pub fn search_documents_by_embedding(
+    pub fn search_document_by_embedding(
         &self,
         query_embedding: Vec<f32>,
+        document_id: String,
     ) -> Result<String, String> {
-        let mut similarities: Vec<(String, f32)> = Vec::new();
+        let document = match self.documents.get(&document_id) {
+            Ok(Some(doc)) => doc,
+            Ok(None) => return Err(format!("Document with ID '{}' not found", document_id)),
+            Err(e) => return Err(format!("Failed to access document: {:?}", e)),
+        };
 
-        if let Ok(entries) = self.documents.entries() {
-            for (_, document) in entries {
-                if let Some(ref doc_embedding) = document.embeddings {
-                    if doc_embedding.len() == query_embedding.len() {
-                        let similarity = cosine_similarity(&query_embedding, doc_embedding);
-                        similarities.push((document.id.clone(), similarity));
-                    }
-                }
+        if let Some(chunks) = &document.chunks {
+            if chunks.is_empty() {
+                return Err("Document has no chunks for semantic search".to_string());
             }
-        }
 
-        if similarities.is_empty() {
-            return Err("No documents with embeddings found".to_string());
-        }
-
-        similarities.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-        let top_docs = similarities.into_iter().take(5);
-
-        let mut context = String::new();
-        for (doc_id, similarity) in top_docs {
-            if let Ok(Some(doc)) = self.documents.get(&doc_id) {
-                let text = doc.extracted_text.as_ref().unwrap_or(&doc.name);
-                context.push_str(&format!(
-                    "Document: {} (Similarity: {:.4})\n{}\n\n",
-                    doc.name, similarity, text
+            if chunks[0].embedding.len() != query_embedding.len() {
+                return Err(format!(
+                    "Embedding dimension mismatch: query={}, document chunks={}",
+                    query_embedding.len(),
+                    chunks[0].embedding.len()
                 ));
             }
+
+            let mut chunk_similarities: Vec<(&DocumentChunk, f32)> = chunks
+                .iter()
+                .map(|chunk| {
+                    let similarity = cosine_similarity(&query_embedding, &chunk.embedding);
+                    (chunk, similarity)
+                })
+                .filter(|(_, similarity)| *similarity > 0.1)
+                .collect();
+
+            if chunk_similarities.is_empty() {
+                return Ok(format!(
+                    "Document: {}\nNo relevant sections found for your query. The document may not contain information related to your question.",
+                    document.name
+                ));
+            }
+
+            chunk_similarities
+                .sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+            let top_chunks: Vec<String> = chunk_similarities
+                .into_iter()
+                .take(3)
+                .map(|(chunk, similarity)| {
+                    let clean_text = chunk
+                        .text
+                        .trim()
+                        .replace('\n', " ")
+                        .replace('\r', " ")
+                        .replace("  ", " ");
+
+                    let max_chars = if similarity > 0.5 {
+                        300
+                    } else if similarity > 0.3 {
+                        200
+                    } else {
+                        150
+                    };
+
+                    let display_text = if clean_text.len() > max_chars {
+                        format!("{}...", &clean_text[..max_chars])
+                    } else {
+                        clean_text
+                    };
+
+                    format!("[Relevance: {:.2}] {}", similarity, display_text)
+                })
+                .collect();
+
+            return Ok(format!(
+                "Document: {}\nMost relevant sections:\n\n{}",
+                document.name,
+                top_chunks.join("\n\n")
+            ));
         }
 
-        Ok(context)
+        let doc_embedding = match &document.embeddings {
+            Some(embedding) => embedding,
+            None => return Err("Document has no embeddings for semantic search".to_string()),
+        };
+
+        if doc_embedding.len() != query_embedding.len() {
+            return Err(format!(
+                "Embedding dimension mismatch: query={}, document={}",
+                query_embedding.len(),
+                doc_embedding.len()
+            ));
+        }
+
+        let similarity = cosine_similarity(&query_embedding, doc_embedding);
+
+        if similarity < 0.05 {
+            return Ok(format!(
+                "Document: {} (Low relevance: {:.2})\nNo highly relevant content found for your query.",
+                document.name, similarity
+            ));
+        }
+
+        let text_snippet = if let Some(ref full_text) = document.extracted_text {
+            let clean_text = full_text
+                .replace('\n', " ")
+                .replace('\r', " ")
+                .replace("  ", " ");
+
+            let max_chars = if similarity > 0.4 {
+                400
+            } else if similarity > 0.2 {
+                250
+            } else {
+                150
+            };
+
+            if clean_text.len() > max_chars {
+                format!("{}...", &clean_text[..max_chars])
+            } else {
+                clean_text
+            }
+        } else {
+            format!("Document: {} (No extracted text available)", document.name)
+        };
+
+        Ok(format!(
+            "Document: {} (Similarity: {:.2})\n{}",
+            document.name, similarity, text_snippet
+        ))
     }
 }
 
