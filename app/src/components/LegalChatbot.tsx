@@ -66,6 +66,11 @@ const LegalChatbot: React.FC<LegalChatbotProps> = ({
   const [isLoading, setIsLoading] = useState(false);
 
   const addMessage = (text: string, sender: 'user' | 'bot') => {
+    if (!text || typeof text !== 'string') {
+      console.warn('Invalid message text:', text);
+      return;
+    }
+
     const newMessage: Message = {
       id: Date.now().toString(),
       text,
@@ -158,18 +163,19 @@ const LegalChatbot: React.FC<LegalChatbotProps> = ({
           : 'No context found.';
       }
 
-      // Prepare limited conversation history
-      const limitedHistory = messages.slice(-1).map((msg) => {
-        const truncatedText = msg.text.substring(
-          0,
-          CHAT_CONFIG.HISTORY_TRUNCATE_LENGTH,
-        );
-        return msg.sender === 'user'
-          ? { user: { content: truncatedText } }
-          : { assistant: { content: [truncatedText], tool_calls: [] } };
-      });
+      const limitedHistory = messages
+        .slice(-1)
+        .filter((msg) => msg.text && msg.text.trim())
+        .map((msg) => {
+          const truncatedText = msg.text.substring(
+            0,
+            CHAT_CONFIG.HISTORY_TRUNCATE_LENGTH,
+          );
+          return msg.sender === 'user'
+            ? { user: { content: truncatedText } }
+            : { assistant: { content: [truncatedText], tool_calls: [] } };
+        });
 
-      // Check and optimize request size
       let estimatedSize = estimateRequestSize(
         userInput,
         context,
@@ -188,7 +194,7 @@ const LegalChatbot: React.FC<LegalChatbotProps> = ({
           return;
         }
 
-        limitedHistory.length = 0; // Clear history for oversized requests
+        limitedHistory.length = 0;
       }
 
       const llmService = await llmChatbotService();
@@ -206,9 +212,14 @@ const LegalChatbot: React.FC<LegalChatbotProps> = ({
 
       let responseText = llmResponse;
       try {
-        const parsedResponse = JSON.parse(llmResponse);
-        responseText = parsedResponse.answer || llmResponse;
-      } catch {}
+        if (llmResponse && typeof llmResponse === 'string') {
+          const parsedResponse = JSON.parse(llmResponse);
+          responseText = parsedResponse.answer || llmResponse;
+        }
+      } catch (parseError) {
+        console.warn('Failed to parse LLM response as JSON:', parseError);
+        responseText = llmResponse || 'No response received from AI assistant.';
+      }
 
       addMessage(responseText, 'bot');
     } catch (error) {
