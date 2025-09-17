@@ -67,12 +67,15 @@ jobs:
           # Set environment variable to suppress mainnet plaintext identity warning
           echo "DFX_WARNING=-mainnet_plaintext_identity" >> $GITHUB_ENV
 
-      - name: Build canisters
+      - name: Create and Build canisters
         run: |
           source "$HOME/.local/share/dfx/env"
           # First pull dependencies
           dfx deps pull
           dfx deps init
+          # Create canisters on IC network if they don't exist
+          dfx canister create --network ic --with-cycles 1000000000000 merodocs_registry || echo "merodocs_registry canister already exists"
+          dfx canister create --network ic --with-cycles 1000000000000 llm_chatbot || echo "llm_chatbot canister already exists"
           # Build all canisters
           dfx build
           # Verify build artifacts exist
@@ -84,14 +87,20 @@ jobs:
         run: |
           source "$HOME/.local/share/dfx/env"
           # Check wallet balance
+          echo "Checking wallet balance..."
           dfx wallet --network ic balance || echo "Warning: Could not check wallet balance"
-          # Calculate cycles for each canister (3T cycles total, split between canisters)
-          CYCLES=$(echo "3.0 * 1000000000000" | bc -l | cut -d. -f1)
+          # Calculate cycles for each canister (2T cycles total, split between canisters)
+          CYCLES=$(echo "2.0 * 1000000000000" | bc -l | cut -d. -f1)
           echo "Deploying with $CYCLES cycles per canister"
           # Deploy dependencies first
+          echo "Deploying dependencies..."
           dfx deps deploy --network ic || echo "No dependencies to deploy"
-          # Deploy our canisters
-          dfx deploy --network ic --with-cycles $CYCLES
+          # Deploy our canisters using dfx deploy which handles both create and install
+          echo "Deploying merodocs_registry..."
+          dfx deploy --network ic --with-cycles $CYCLES merodocs_registry
+          echo "Deploying llm_chatbot..."
+          dfx deploy --network ic --with-cycles $CYCLES llm_chatbot
+          echo "Deployment completed successfully!"
 
       - name: Get canister info
         run: |
