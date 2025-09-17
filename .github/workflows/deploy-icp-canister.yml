@@ -69,6 +69,13 @@ jobs:
       - name: Build canisters
         run: |
           source "$HOME/.local/share/dfx/env"
+          # Pull dependencies first
+          dfx deps pull
+          dfx deps init
+          # Create canisters if they don't exist
+          dfx canister create --network ic merodocs_registry || echo "merodocs_registry already exists"
+          dfx canister create --network ic llm_chatbot || echo "llm_chatbot already exists"
+          # Build canisters
           dfx build
           cargo build --target wasm32-unknown-unknown --release -p merodocs_registry
           cargo build --target wasm32-unknown-unknown --release -p llm_chatbot
