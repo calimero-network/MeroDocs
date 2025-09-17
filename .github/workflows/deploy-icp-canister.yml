@@ -76,6 +76,12 @@ jobs:
           # Create canisters on IC network if they don't exist
           dfx canister create --network ic --with-cycles 1000000000000 merodocs_registry || echo "merodocs_registry canister already exists"
           dfx canister create --network ic --with-cycles 1000000000000 llm_chatbot || echo "llm_chatbot canister already exists"
+          # Wait a moment for canister IDs to be properly registered
+          sleep 5
+          # Verify canister IDs are available
+          echo "Verifying canister IDs..."
+          dfx canister id merodocs_registry --network ic
+          dfx canister id llm_chatbot --network ic
           # Build all canisters
           dfx build
           # Verify build artifacts exist
@@ -95,11 +101,15 @@ jobs:
           # Deploy dependencies first
           echo "Deploying dependencies..."
           dfx deps deploy --network ic || echo "No dependencies to deploy"
+          # Verify canister IDs before deployment
+          echo "Verifying canister IDs before deployment..."
+          dfx canister id merodocs_registry --network ic
+          dfx canister id llm_chatbot --network ic
           # Deploy our canisters using dfx deploy which handles both create and install
           echo "Deploying merodocs_registry..."
-          dfx deploy --network ic --with-cycles $CYCLES merodocs_registry
+          dfx deploy --network ic --with-cycles $CYCLES merodocs_registry || dfx canister install --network ic --mode reinstall merodocs_registry
           echo "Deploying llm_chatbot..."
-          dfx deploy --network ic --with-cycles $CYCLES llm_chatbot
+          dfx deploy --network ic --with-cycles $CYCLES llm_chatbot || dfx canister install --network ic --mode reinstall llm_chatbot
           echo "Deployment completed successfully!"
 
       - name: Get canister info
