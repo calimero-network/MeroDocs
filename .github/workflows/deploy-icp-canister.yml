@@ -75,8 +75,19 @@ jobs:
           # Create canisters if they don't exist
           dfx canister create --network ic merodocs_registry || echo "merodocs_registry already exists"
           dfx canister create --network ic llm_chatbot || echo "llm_chatbot already exists"
-          # Build canisters
-          dfx build
+          # Wait for canister registration to complete
+          sleep 10
+          # Verify canister IDs are available
+          echo "Verifying canister IDs..."
+          dfx canister id merodocs_registry --network ic || echo "merodocs_registry ID not found"
+          dfx canister id llm_chatbot --network ic || echo "llm_chatbot ID not found"
+          # Show canister_ids.json if it exists
+          if [ -f "canister_ids.json" ]; then
+            echo "canister_ids.json contents:"
+            cat canister_ids.json
+          fi
+          # Build canisters with network flag
+          dfx build --network ic
           cargo build --target wasm32-unknown-unknown --release -p merodocs_registry
           cargo build --target wasm32-unknown-unknown --release -p llm_chatbot
           candid-extractor target/wasm32-unknown-unknown/release/merodocs_registry.wasm > merodocs_registry/merodocs_registry.did
