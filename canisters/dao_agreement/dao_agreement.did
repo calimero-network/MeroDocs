@@ -1,0 +1,97 @@
+type Agreement = record {
+  id : text;
+  status : AgreementStatus;
+  title : text;
+  creator : principal;
+  participants : vec principal;
+  documents : vec DocumentRef;
+  description : text;
+  created_at : nat64;
+  voting_threshold : nat8;
+  milestones : vec Milestone;
+};
+type AgreementStatus = variant { Active; Cancelled; Completed };
+type DocumentRef = record {
+  title : text;
+  doc_id : text;
+  required_signers : vec principal;
+  current_signers : vec principal;
+  is_signed_by_all : bool;
+};
+type Event = record {
+  actor : principal;
+  document_id : opt text;
+  timestamp : nat64;
+  details : text;
+  milestone_id : opt nat64;
+  agreement_id : text;
+  event_type : text;
+};
+type Milestone = record {
+  id : nat64;
+  status : MilestoneStatus;
+  title : text;
+  milestone_type : MilestoneType;
+  executed_at : opt nat64;
+  votes : vec record { principal; bool };
+  recipient : principal;
+  description : text;
+  created_at : nat64;
+  completed_at : opt nat64;
+  amount : nat;
+};
+type MilestoneStatus = variant {
+  VotingActive;
+  Approved;
+  Rejected;
+  Executed;
+  ReadyForVoting;
+  Pending;
+};
+type MilestoneType = variant {
+  MultiCondition : record {
+    required_docs : vec text;
+    requires_vote : bool;
+    min_time : opt nat64;
+  };
+  ManualApproval;
+  DocumentSignature : record { required_doc_id : text };
+  TimeRelease : record { release_time : nat64 };
+};
+type MilestoneVotingInfo = record {
+  status : MilestoneStatus;
+  rejection_votes : nat64;
+  approval_votes : nat64;
+  milestone_id : nat64;
+  voting_threshold : nat8;
+  total_participants : nat64;
+  required_votes : nat64;
+};
+type Result = variant { Ok : text; Err : text };
+type Result_1 = variant { Ok : MilestoneVotingInfo; Err : text };
+service : (principal) -> {
+  add_participant : (text, principal) -> (Result);
+  create_agreement : (
+      text,
+      text,
+      text,
+      vec principal,
+      vec DocumentRef,
+      vec Milestone,
+      nat8,
+    ) -> (Result);
+  execute_milestone : (text, nat64) -> (Result);
+  fund_agreement : (text, nat) -> (Result);
+  get_agreement : (text) -> (opt Agreement) query;
+  get_agreement_balance : (text) -> (nat) query;
+  get_canister_principal : () -> (principal) query;
+  get_ledger_canister_id : () -> (principal) query;
+  get_mainnet_ledger_id : () -> (principal) query;
+  get_milestone_voting_status : (text, nat64) -> (Result_1) query;
+  get_my_agreements : () -> (vec Agreement) query;
+  list_events : () -> (vec Event) query;
+  set_ledger_canister_id : (principal) -> (Result);
+  sign_document : (text, text) -> (Result);
+  use_mainnet_ledger : () -> (Result);
+  vote_milestone : (text, nat64, bool) -> (Result);
+}

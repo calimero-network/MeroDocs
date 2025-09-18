@@ -4,6 +4,22 @@
       "type": "pull",
       "id": "w36hm-eqaaa-aaaal-qr76a-cai"
     },
+    "dao_agreement": {
+      "candid": "dao_agreement/dao_agreement.did",
+      "type": "custom",
+      "shrink": true,
+      "gzip": true,
+      "wasm": "target/wasm32-unknown-unknown/release/dao_agreement.wasm",
+      "build": [
+        "cargo build --target wasm32-unknown-unknown --release -p dao_agreement",
+        "candid-extractor target/wasm32-unknown-unknown/release/dao_agreement.wasm > dao_agreement/dao_agreement.did"
+      ],
+      "metadata": [
+        {
+          "name": "candid:service"
+        }
+      ]
+    },
     "merodocs_registry": {
       "candid": "merodocs_registry/merodocs_registry.did",
       "type": "custom",
