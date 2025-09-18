@@ -137,6 +137,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "dao_agreement"
+version = "0.1.0"
+dependencies = [
+ "candid",
+ "ic-cdk 0.16.1",
+ "ic-cdk-macros 0.13.2",
+ "ic-stable-structures 0.7.0",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "data-encoding"
 version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -285,6 +297,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ic-stable-structures"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e54aeb082293c69def5ab34c70593ba85ff000386f7d0eacdf73514daaeca031"
+dependencies = [
+ "ic_principal",
+]
+
+[[package]]
 name = "ic0"
 version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -351,7 +372,7 @@ dependencies = [
  "candid",
  "hex",
  "ic-cdk 0.16.1",
- "ic-stable-structures",
+ "ic-stable-structures 0.6.9",
  "serde",
 ]
 
